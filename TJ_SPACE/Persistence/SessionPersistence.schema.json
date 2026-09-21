@@ -1,0 +1,17 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"tjspace://system32/session-persistence",
+  "title":"TJ SPACE System 32",
+  "type":"object",
+  "required":["version","system","kind","storage","session","worldSnapshot","bookmarks","restore"],
+  "properties":{
+    "version":{"type":"string"},
+    "system":{"const":32},
+    "kind":{"const":"save-load-session-persistence"},
+    "storage":{"type":"object","required":["sessions","worldSnapshots"]},
+    "session":{"type":"object","required":["schemaVersion","fields"]},
+    "worldSnapshot":{"type":"object","required":["schemaVersion","kind","captures","excludes"]},
+    "bookmarks":{"type":"object","required":["identity","overwriteOnDuplicateName"]},
+    "restore":{"type":"object","required":["failClosedOnCorruptSnapshot","actorResolution","teleportPhysics"]}
+  }
+}
