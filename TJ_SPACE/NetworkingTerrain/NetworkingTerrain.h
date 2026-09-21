@@ -59,7 +59,7 @@ public:
  virtual void Tick(float DeltaSeconds) override;
  bool BuildLAN(); bool BuildTor(); bool BuildClearnet(const FTJNetworkGateway& Gateway); bool BuildVPN(const TArray<FTJVPNPeer>& Peers);
  bool RenderCertificate(const FTJTLSCertificate& Cert); bool RenderDNS(const FTJDNSResolution& Resolution); bool RenderTraffic();
- bool Configure(const FTJNetworkStrategyConfig& NewConfig);
+ bool Configure(const FTJNetworkStrategyConfig& NewConfig,const TArray<FTJVPNPeer>& Peers);
  bool EnterTorLayer(bool bEnter);
 private:
  UPROPERTY() TObjectPtr<USceneComponent> Root;
