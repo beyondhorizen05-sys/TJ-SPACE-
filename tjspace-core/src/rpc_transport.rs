@@ -670,6 +670,7 @@ mod tests {
             timestamp: None,
             auth_cookie: None,
             auth_sig: None,
+            headers: HashMap::new(),
             trace_id: None,
         };
         let bytes = serde_json::to_vec(&request).unwrap();
