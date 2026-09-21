@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use axum::{
     extract::{ws::{Message, WebSocket, WebSocketUpgrade}, Query, State},
-    response::{Response, IntoResponse},
+    response::{Response, IntoResponse, Json},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -414,6 +414,7 @@ pub struct SyncQuery {
 }
 
 pub async fn websocket_handler(
+    ws: WebSocketUpgrade,
     State(core): State<Arc<crate::Core>>,
     Query(query): Query<SyncQuery>,
 ) -> Response {
@@ -479,7 +480,6 @@ pub mod grpc {
     tonic::include_proto!("tjspace.v1");
 
     use super::*;
-    use futures_util::StreamExt;
 
     #[derive(Clone)]
     pub struct SyncGrpcService {
