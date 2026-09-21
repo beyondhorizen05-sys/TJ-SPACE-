@@ -82,6 +82,7 @@ pub async fn serve_api(core:Arc<Core>)->Result<()>{
       .route("/api/v1/device/:action",post(api_dispatch))
       .route("/api/v1/update/:action",post(api_dispatch))
       .route("/api/v1/diag/:action",post(api_dispatch))
+      .route("/api/v1/{*command}",post(api_command))
       .with_state(core.clone())
       .layer(middleware::from_fn_with_state(core.clone(),jwt_middleware));
     let listener=tokio::net::TcpListener::bind(&core.config.bind).await?;axum::serve(listener,app).await?;Ok(())
@@ -91,11 +92,29 @@ async fn jwt_middleware(State(core):State<Arc<Core>>,headers:HeaderMap,req:axum:
     verify_jwt(&core.config.jwt_secret,token).map_err(|_|StatusCode::UNAUTHORIZED)?;Ok(next.run(req).await)
 }
 async fn api_get_status(State(core):State<Arc<Core>>)->Result<Json<Value>,StatusCode>{core.get_system_state().await.map(|v|Json(serde_json::to_value(v).unwrap())).map_err(|_|StatusCode::INTERNAL_SERVER_ERROR)}
+async fn api_command(State(core):State<Arc<Core>>,Path(command):Path<String>,Json(env):Json<ApiEnvelope>)->Result<Json<Value>,StatusCode>{
+    let method=rpc_for_path(&command).ok_or(StatusCode::NOT_FOUND)?;
+    let out=core.handle_rpc_request(RpcRequest{method,params:env.params,trace_id:env.trace_id,auth_token:Some(core.config.auth_token.clone())}).await;
+    if out.ok{Ok(Json(out.result.unwrap_or(Value::Null)))}else{Err(StatusCode::BAD_REQUEST)}
+}
 async fn api_dispatch(State(core):State<Arc<Core>>,Path(action):Path<String>,Json(mut env):Json<ApiEnvelope>)->Result<Json<Value>,StatusCode>{
     env.method=method_for_path(&env.method,&action);let out=core.handle_rpc_request(RpcRequest{method:env.method,params:env.params,trace_id:env.trace_id,auth_token:Some(core.config.auth_token.clone())}).await;
     if out.ok{Ok(Json(out.result.unwrap_or(Value::Null)))}else{Err(if out.error.as_ref().map(|e|e.code.as_str())==Some("METHOD_NOT_FOUND"){StatusCode::NOT_FOUND}else{StatusCode::BAD_REQUEST})}
 }
-fn method_for_path(method:&str,action:&str)->String{if method.is_empty(){match action{_=>String::new()}}else{method.into()}}
+fn method_for_path(method:&str,_action:&str)->String{method.into()}
+fn rpc_for_path(path:&str)->Option<String>{
+    match path.trim_matches('/') {
+        "status"=>Some("GetSystemState".into()),
+        "service/list"=>Some("ListServices".into()),"service/start"=>Some("StartService".into()),"service/stop"=>Some("StopService".into()),"service/restart"=>Some("RestartService".into()),"service/logs"=>Some("ServiceLogs".into()),"service/config"=>Some("ServiceConfig".into()),
+        "package/install"=>Some("InstallPackage".into()),"package/uninstall"=>Some("UninstallPackage".into()),"package/list"=>Some("ListPackages".into()),"package/inspect"=>Some("InspectPackage".into()),"package/verify"=>Some("VerifyPackage".into()),
+        "registry/add"=>Some("RegistryAdd".into()),"registry/remove"=>Some("RegistryRemove".into()),"registry/list"=>Some("RegistryList".into()),"registry/search"=>Some("RegistrySearch".into()),
+        "volume/create"=>Some("CreateVolume".into()),"volume/resize"=>Some("ResizeVolume".into()),"volume/delete"=>Some("DeleteVolume".into()),"volume/list"=>Some("ListVolumes".into()),
+        "backup/create"=>Some("OrchestrateBackup".into()),"backup/restore"=>Some("OrchestrateRestore".into()),"backup/list"=>Some("ListBackups".into()),"backup/verify"=>Some("VerifyBackup".into()),
+        "device/add"=>Some("DeviceAdd".into()),"device/revoke"=>Some("DeviceRevoke".into()),"device/list"=>Some("DeviceList".into()),
+        "update/check"=>Some("CheckForOsUpdate".into()),"update/apply"=>Some("ApplyOsUpdate".into()),"update/rollback"=>Some("RollbackOs".into()),
+        "diag/dump"=>Some("DiagDump".into()),"diag/restore"=>Some("DiagRestore".into()),_=>None
+    }
+}
 
 #[derive(Parser,Debug)]
 #[command(name="tjspace-cli",version,about="TJ SPACE headless control CLI")]
@@ -118,7 +137,7 @@ pub async fn run_cli(cli:Cli)->i32{
     let token=match cli.token.or_else(||std::env::var("TJS_JWT_TOKEN").ok()){Some(t)=>t,None=>{eprintln!("authentication token required");return EXIT_AUTH}};
     let client=Client::new();
     let call=|method:String,params:Value|{let client=client.clone();let endpoint=cli.endpoint.clone();let token=token.clone();async move{
-        let req=ApiEnvelope{method,params,trace_id:None};let r=client.post(format!("{endpoint}/api/v1/rpc")).bearer_auth(token).json(&req).send().await?;let status=r.status();let v:RpcResponse=r.json().await?;if !status.is_success()||!v.ok{return Err(anyhow!(v.error.map(|e|e.message).unwrap_or_else(||format!("HTTP {status}"))))}Ok(v.result.unwrap_or(Value::Null))}}};
+        let req=ApiEnvelope{method,params,trace_id:None};let path=rpc_path(&method);let r=client.post(format!("{endpoint}{path}")).bearer_auth(token).json(&req).send().await?;let status=r.status();let v:RpcResponse=r.json().await?;if !status.is_success()||!v.ok{return Err(anyhow!(v.error.map(|e|e.message).unwrap_or_else(||format!("HTTP {status}"))))}Ok(v.result.unwrap_or(Value::Null))}}};
     let result=match cli.command{
         CliCommand::Status=>call("GetSystemState".into(),json!({})).await,
         CliCommand::Service(c)=>service_call(&call,c).await,
@@ -139,4 +158,17 @@ async fn volume_call<F,Fut>(call:&F,c:VolumeCommand)->Result<Value>where F:Fn(St
 async fn backup_call<F,Fut>(call:&F,c:BackupCommand)->Result<Value>where F:Fn(String,Value)->Fut,Fut:std::future::Future<Output=Result<Value>>{match c{BackupCommand::Create{package_id,target_id}=>call("OrchestrateBackup".into(),json!({"package_id":package_id,"target_id":target_id})).await,BackupCommand::Restore{monolith_id}=>call("OrchestrateRestore".into(),json!({"monolith_id":monolith_id})).await,BackupCommand::List=>call("ListBackups".into(),json!({})).await,BackupCommand::Verify{monolith_id}=>call("VerifyBackup".into(),json!({"monolith_id":monolith_id})).await}}
 async fn device_call<F,Fut>(call:&F,c:DeviceCommand)->Result<Value>where F:Fn(String,Value)->Fut,Fut:std::future::Future<Output=Result<Value>>{match c{DeviceCommand::Add{device_id}=>call("DeviceAdd".into(),json!({"device_id":device_id})).await,DeviceCommand::Revoke{device_id}=>call("DeviceRevoke".into(),json!({"device_id":device_id})).await,DeviceCommand::List=>call("DeviceList".into(),json!({})).await}}
 async fn update_call<F,Fut>(call:&F,c:UpdateCommand)->Result<Value>where F:Fn(String,Value)->Fut,Fut:std::future::Future<Output=Result<Value>>{match c{UpdateCommand::Check=>call("CheckForOsUpdate".into(),json!({})).await,UpdateCommand::Apply{release_id}=>call("ApplyOsUpdate".into(),json!({"release_id":release_id})).await,UpdateCommand::Rollback{target_version}=>call("RollbackOs".into(),json!({"target_version":target_version})).await}}
-async fn diag_call<F,Fut>(call:&F,c:DiagCommand)->Result<Value>where F:Fn(String,Value)->Fut,Fut:std::future::Future<Output=Result<Value>>{match c{DiagCommand::Dump=>call("DiagDump".into(),json!({})).await,DiagCommand::Restore{snapshot}=>{let v:Value=serde_json::from_slice(&tokio::fs::read(snapshot).await?)?;call("DiagRestore".into(),json!({"snapshot":v})).await}}}
+async fn rpc_path(method:&str)->String{
+    match method{
+        "GetSystemState"=>"/api/v1/status","ListServices"=>"/api/v1/service/list","StartService"=>"/api/v1/service/start","StopService"=>"/api/v1/service/stop","RestartService"=>"/api/v1/service/restart","ServiceLogs"=>"/api/v1/service/logs","ServiceConfig"=>"/api/v1/service/config",
+        "InstallPackage"=>"/api/v1/package/install","UninstallPackage"=>"/api/v1/package/uninstall","ListPackages"=>"/api/v1/package/list","InspectPackage"=>"/api/v1/package/inspect","VerifyPackage"=>"/api/v1/package/verify",
+        "RegistryAdd"=>"/api/v1/registry/add","RegistryRemove"=>"/api/v1/registry/remove","RegistryList"=>"/api/v1/registry/list","RegistrySearch"=>"/api/v1/registry/search",
+        "CreateVolume"=>"/api/v1/volume/create","ResizeVolume"=>"/api/v1/volume/resize","DeleteVolume"=>"/api/v1/volume/delete","ListVolumes"=>"/api/v1/volume/list",
+        "OrchestrateBackup"=>"/api/v1/backup/create","OrchestrateRestore"=>"/api/v1/backup/restore","ListBackups"=>"/api/v1/backup/list","VerifyBackup"=>"/api/v1/backup/verify",
+        "DeviceAdd"=>"/api/v1/device/add","DeviceRevoke"=>"/api/v1/device/revoke","DeviceList"=>"/api/v1/device/list",
+        "CheckForOsUpdate"=>"/api/v1/update/check","ApplyOsUpdate"=>"/api/v1/update/apply","RollbackOs"=>"/api/v1/update/rollback",
+        "DiagDump"=>"/api/v1/diag/dump","DiagRestore"=>"/api/v1/diag/restore",_=>"/api/v1/unknown"
+    }.into()
+}
+
+fn diag_call<F,Fut>(call:&F,c:DiagCommand)->Result<Value>where F:Fn(String,Value)->Fut,Fut:std::future::Future<Output=Result<Value>>{match c{DiagCommand::Dump=>call("DiagDump".into(),json!({})).await,DiagCommand::Restore{snapshot}=>{let v:Value=serde_json::from_slice(&tokio::fs::read(snapshot).await?)?;call("DiagRestore".into(),json!({"snapshot":v})).await}}}
