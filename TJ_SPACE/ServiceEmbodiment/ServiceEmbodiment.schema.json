@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tjspace://system3/service-embodiment",
+  "title": "TJ SPACE Service Embodiment Layer",
+  "type": "object",
+  "required": ["version", "states", "transitionMatrix", "manifest"],
+  "properties": {
+    "version": {"type": "string", "const": "1.0.0"},
+    "states": {
+      "type": "array",
+      "items": {"type": "string", "enum": ["stopped", "starting", "running", "error", "updating"]}
+    },
+    "transitionMatrix": {
+      "type": "array",
+      "minItems": 25,
+      "maxItems": 25,
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "curve", "durationSeconds"],
+        "properties": {
+          "from": {"type": "string"},
+          "to": {"type": "string"},
+          "curve": {"type": "string"},
+          "durationSeconds": {"type": "number", "minimum": 0}
+        }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "required": ["packageId", "displayName", "interfaces", "dependencies", "resources"],
+      "properties": {
+        "packageId": {"type": "string", "minLength": 1},
+        "displayName": {"type": "string", "minLength": 1},
+        "buildingMesh": {"type": "string"},
+        "interiorMesh": {"type": "string"},
+        "interiorModuleMeshes": {"type": "array", "items": {"type": "string"}},
+        "interfaces": {"type": "array"},
+        "dependencies": {"type": "array"},
+        "resources": {
+          "type": "object",
+          "required": ["cpuCores", "memoryGB", "storageGB", "networkMbps"],
+          "properties": {
+            "cpuCores": {"type": "number", "minimum": 0},
+            "memoryGB": {"type": "number", "minimum": 0},
+            "storageGB": {"type": "number", "minimum": 0},
+            "networkMbps": {"type": "number", "minimum": 0}
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
