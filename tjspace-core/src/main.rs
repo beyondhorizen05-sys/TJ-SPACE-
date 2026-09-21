@@ -34,6 +34,15 @@ enum Command{
     InstallerConfirmExecute{operation_id:String},
     InstallerVerify,
     InstallerFirstBoot,
+    OsCheck,
+    OsDownload{release_id:String},
+    OsVerify{release_id:String},
+    OsApply{release_id:String},
+    OsSafeMode,
+    OsExitSafeMode,
+    OsFactoryReset{#[arg(long)] preserve_data:bool},
+    OsRollback{target_version:String},
+    OsHistory,
 
 }
 #[tokio::main]
