@@ -10,6 +10,7 @@ pub mod rpc_transport;
 pub mod container_runtime;
 pub mod registry;
 pub mod s9pk;
+pub mod s9pk_toolchain;
 pub mod service;
 pub mod sign;
 pub mod tunnel;
