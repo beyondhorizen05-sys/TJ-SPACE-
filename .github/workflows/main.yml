@@ -1,0 +1,25 @@
+name: TJ SPACE Main
+on:
+  push:
+    branches: [main]
+jobs:
+  version-build:
+    runs-on: ubuntu-latest
+    permissions: {contents: write}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Version check
+        run: |
+          test -f Cargo.toml
+          cargo metadata --no-deps --format-version 1 >/dev/null
+      - run: cargo test --workspace --all-targets
+      - run: cargo build --workspace --release
+      - name: Tag version
+        run: |
+          V=$(awk -F'"' '/^version = /{print $2; exit}' Cargo.toml)
+          test -n "$V"
+          git fetch --tags
+          git rev-parse "v$V" >/dev/null 2>&1 || git tag "v$V"
+          git push origin "v$V" || true
