@@ -1,0 +1,12 @@
+{
+ "$schema":"https://json-schema.org/draft/2020-12/schema",
+ "$id":"tjspace://system5/networking-terrain",
+ "type":"object","required":["strategies","layers","torMode","trafficRule","construction"],
+ "properties":{
+  "strategies":{"type":"array","items":{"enum":["LAN","Tor","Clearnet","WireGuard"]},"minItems":4,"maxItems":4},
+  "layers":{"type":"object","required":["streets","subterraneanTunnels","openWorldBridge","privateRoads","tlsShields","dnsBeams","trafficPulses"]},
+  "torMode":{"type":"object","required":["lighting","audio","fog"],"properties":{"lighting":{"type":"string"},"audio":{"type":"string"},"fog":{"type":"string"}}},
+  "trafficRule":{"type":"string","const":"traffic is represented as discrete light pulses on a selected network layer; strategy layers may coexist"},
+  "construction":{"type":"object","required":["enableDisable","blendSeconds"],"properties":{"enableDisable":{"type":"boolean"},"blendSeconds":{"type":"number","exclusiveMinimum":0}}}
+ },"additionalProperties":false
+}
