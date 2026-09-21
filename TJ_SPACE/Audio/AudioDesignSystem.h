@@ -2,6 +2,8 @@
 #include "CoreMinimal.h"
 #include "Sound/SoundBase.h"
 #include "Sound/ReverbEffect.h"
+#include "ServiceEmbodimentLayer.h"
+#include "Components/AudioComponent.h"
 #include "AudioDesignSystem.generated.h"
 
 UENUM(BlueprintType) enum class ETJAudioChannel : uint8 { Master, Ambience, Machinery, UI, Voice, Alerts, Footsteps };
@@ -46,6 +48,7 @@ public:
  UFUNCTION(BlueprintCallable,Category="TJ SPACE|Audio|Integration") bool BindServiceStateAudio(const FString& PackageId);
  UFUNCTION(BlueprintCallable,Category="TJ SPACE|Audio|Integration") bool ValidateServiceTransitionCueCoverage() const;
  UFUNCTION(BlueprintCallable,Category="TJ SPACE|Audio|Integration") bool RegisterServiceTransitionCue(const FString& TransitionKey,USoundBase* Cue);
+ UFUNCTION(BlueprintCallable,Category="TJ SPACE|Audio|Integration") bool RegisterChannelClass(ETJAudioChannel Channel,USoundClass* SoundClass);
  UFUNCTION(BlueprintCallable,Category="TJ SPACE|Audio|Integration") bool RegisterAlertSignature(ETJAlarmSeverity Severity,const FString& SourceKey,USoundBase* Cue);
  UFUNCTION(BlueprintCallable,Category="TJ SPACE|Audio|Integration") bool BindTelemetryAlertSignature(ETJAlarmSeverity Severity,const FString& SourceKey);
  void SetWorld(UWorld* InWorld);
