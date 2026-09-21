@@ -1,0 +1,1 @@
+export type MultiHostInterface = {name:string; ports?:number[]};
