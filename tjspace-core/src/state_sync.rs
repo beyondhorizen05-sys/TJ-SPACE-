@@ -425,7 +425,6 @@ pub mod grpc {
     #[derive(Clone)]
     pub struct SyncGrpcService {
         pub bridge: Arc<SyncBridge>,
-        pub authorized_token: String,
     }
 
     #[tonic::async_trait]
