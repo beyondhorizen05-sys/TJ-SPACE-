@@ -1,0 +1,1 @@
+{"version":"1.0.0","backupMode":"differential","differentialDissolve":true,"restoreInterlock":{"holdSeconds":2},"deletionWarning":"warn when monolith is the only restore point for its target","schedule":"calendar obelisk"}
