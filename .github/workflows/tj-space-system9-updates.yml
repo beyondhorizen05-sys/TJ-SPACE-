@@ -1,0 +1,21 @@
+name: TJ SPACE System 9 — OS Updates
+on:
+  push:
+    paths:
+      - "tjspace-core/src/os_updates.rs"
+      - "tjspace-core/src/lib.rs"
+      - "tjspace-core/src/main.rs"
+      - "tjspace-core/tests/os_updates.rs"
+      - "tjspace-core/Cargo.toml"
+  pull_request:
+    paths:
+      - "tjspace-core/**"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test System 9
+        working-directory: tjspace-core
+        run: cargo test --tests os_updates
