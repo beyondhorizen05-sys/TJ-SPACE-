@@ -45,6 +45,7 @@ bool UTJAudioDesignSystem::StreamVoice(const FString& AgentId,const TArray<uint8
 }
 FString UTJAudioDesignSystem::MakeAlertKey(ETJAlarmSeverity S,const FString& Source)const{return FString::Printf(TEXT("%d:%s"),(int32)S,*Source);}
 FString UTJAudioDesignSystem::MakeTransitionKey(ETJServiceState A,ETJServiceState B)const{return FString::Printf(TEXT("%d>%d"),(int32)A,(int32)B);}
+bool UTJAudioDesignSystem::RegisterChannelClass(ETJAudioChannel Channel,USoundClass* SoundClass){if(Channel==ETJAudioChannel::Master||!IsValid(SoundClass))return false;ChannelClasses.Add(Channel,SoundClass);return true;}
 bool UTJAudioDesignSystem::RegisterServiceTransitionCue(const FString& Key,USoundBase* Cue){if(Key.IsEmpty()||!IsValid(Cue))return false;TransitionCues.Add(Key,Cue);return true;}
 bool UTJAudioDesignSystem::RegisterAlertSignature(ETJAlarmSeverity S,const FString& Key,USoundBase* Cue){if(Key.IsEmpty()||!IsValid(Cue))return false;AlertCues.Add(MakeAlertKey(S,Key),Cue);return true;}
 USoundBase* UTJAudioDesignSystem::ResolveAlertSignature(ETJAlarmSeverity S,const FString& Source)const{if(USoundBase* C=AlertCues.FindRef(MakeAlertKey(S,Source)))return C;return AlertCues.FindRef(MakeAlertKey(S,TEXT("*")));}
