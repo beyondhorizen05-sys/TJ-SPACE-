@@ -30,6 +30,10 @@ enum Command{
     HardwareHealth{disk_id:String},
     HardwareScanWifi,
     HardwareHardware,
+    InstallerConfirm{operation_id:String},
+    InstallerConfirmExecute{operation_id:String},
+    InstallerVerify,
+    InstallerFirstBoot,
 
 }
 #[tokio::main]
@@ -60,6 +64,10 @@ async fn main()->anyhow::Result<()>{
         Command::HardwareHealth{disk_id}=>println!("{}",serde_json::to_string_pretty(&hw.GetDiskHealth(&disk_id).await?)?),
         Command::HardwareScanWifi=>println!("{}",serde_json::to_string_pretty(&hw.ScanWifiNetworks().await?)?),
         Command::HardwareHardware=>println!("{}",serde_json::to_string_pretty(&hw.GetSystemHardware().await?)?),
+        Command::InstallerConfirm{operation_id}=>{println!("{operation_id}");},
+        Command::InstallerConfirmExecute{operation_id}=>{core.installer.confirm(&operation_id)?;println!("confirmed {operation_id}");},
+        Command::InstallerVerify=>println!("{}",serde_json::to_string_pretty(&core.installer.verify_installation().await?)?),
+        Command::InstallerFirstBoot=>{core.installer.first_boot_wizard().await?;},
         Command::PackagePartial{s9pk_path,start,end}=>{let b=s9pk_toolchain::ExtractPartial(&s9pk_path,start..end)?;std::io::Write::write_all(&mut std::io::stdout(),&b)?;},
     }
     Ok(())
