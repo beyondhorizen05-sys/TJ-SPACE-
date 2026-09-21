@@ -34,7 +34,8 @@ pub fn issue_jwt(secret:&str,subject:&str,scope:&str,ttl:u64)->Result<String>{
     let mut mac=HmacSha256::new_from_slice(secret.as_bytes())?;mac.update(input.as_bytes());
     Ok(format!("{input}.{}",b64(&mac.finalize().into_bytes())))
 }
-macro_rules! bail_auth {()=>{return Err(anyhow!("invalid JWT"))};}\nfn verify_jwt(secret:&str,token:&str)->Result<JwtClaims>{
+macro_rules! bail_auth {()=>{return Err(anyhow!("invalid JWT"))};}
+fn verify_jwt(secret:&str,token:&str)->Result<JwtClaims>{
     let p:Vec<_>=token.split('.').collect();if p.len()!=3{bail_auth!();}
     let input=format!("{}.{}",p[0],p[1]);let mut mac=HmacSha256::new_from_slice(secret.as_bytes()).map_err(|_|anyhow!("JWT secret invalid"))?;
     mac.update(input.as_bytes());let sig=URL_SAFE_NO_PAD.decode(p[2])?;mac.verify_slice(&sig).map_err(|_|anyhow!("invalid JWT"))?;
@@ -171,7 +172,7 @@ async fn volume_call<F,Fut>(call:&F,c:VolumeCommand)->Result<Value>where F:Fn(St
 async fn backup_call<F,Fut>(call:&F,c:BackupCommand)->Result<Value>where F:Fn(String,Value)->Fut,Fut:std::future::Future<Output=Result<Value>>{match c{BackupCommand::Create{package_id,target_id}=>call("OrchestrateBackup".into(),json!({"package_id":package_id,"target_id":target_id})).await,BackupCommand::Restore{monolith_id}=>call("OrchestrateRestore".into(),json!({"monolith_id":monolith_id})).await,BackupCommand::List=>call("ListBackups".into(),json!({})).await,BackupCommand::Verify{monolith_id}=>call("VerifyBackup".into(),json!({"monolith_id":monolith_id})).await}}
 async fn device_call<F,Fut>(call:&F,c:DeviceCommand)->Result<Value>where F:Fn(String,Value)->Fut,Fut:std::future::Future<Output=Result<Value>>{match c{DeviceCommand::Add{device_id}=>call("DeviceAdd".into(),json!({"device_id":device_id})).await,DeviceCommand::Revoke{device_id}=>call("DeviceRevoke".into(),json!({"device_id":device_id})).await,DeviceCommand::List=>call("DeviceList".into(),json!({})).await}}
 async fn update_call<F,Fut>(call:&F,c:UpdateCommand)->Result<Value>where F:Fn(String,Value)->Fut,Fut:std::future::Future<Output=Result<Value>>{match c{UpdateCommand::Check=>call("CheckForOsUpdate".into(),json!({})).await,UpdateCommand::Apply{release_id}=>call("ApplyOsUpdate".into(),json!({"release_id":release_id})).await,UpdateCommand::Rollback{target_version}=>call("RollbackOs".into(),json!({"target_version":target_version})).await}}
-async fn rpc_path(method:&str)->String{
+fn rpc_path(method:&str)->String{
     match method{
         "GetSystemState"=>"/api/v1/status","ListServices"=>"/api/v1/service/list","StartService"=>"/api/v1/service/start","StopService"=>"/api/v1/service/stop","RestartService"=>"/api/v1/service/restart","ServiceLogs"=>"/api/v1/service/logs","ServiceConfig"=>"/api/v1/service/config",
         "InstallPackage"=>"/api/v1/package/install","UninstallPackage"=>"/api/v1/package/uninstall","ListPackages"=>"/api/v1/package/list","InspectPackage"=>"/api/v1/package/inspect","VerifyPackage"=>"/api/v1/package/verify",
