@@ -1,0 +1,22 @@
+name: TJ SPACE System 11 Federation
+on:
+  push:
+    paths:
+      - "tjspace-core/src/federation.rs"
+      - "tjspace-core/src/lib.rs"
+      - "tjspace-core/Cargo.toml"
+      - "tjspace-core/tests/federation.rs"
+      - ".github/workflows/tj-space-system11-federation.yml"
+  pull_request:
+    paths:
+      - "tjspace-core/src/federation.rs"
+      - "tjspace-core/src/lib.rs"
+      - "tjspace-core/Cargo.toml"
+      - "tjspace-core/tests/federation.rs"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --manifest-path tjspace-core/Cargo.toml
