@@ -137,7 +137,7 @@ impl Core {
     pub async fn get_system_state(&self)->Result<SystemState>{
         Ok(SystemState{node_id:self.config.node_id.clone(),version:version::VERSION.into(),initialized:true,services:service::list(&self.db).await?,state_revision:self.patch_db.get_revision()?})
     }
-    pub async fn start_service(&self,p:&str)->Result<()>{service::start(&self.db,&self.config.runtime,p).await}
+    pub async fn start_service(&self,p:&str)->Result<()>{if self.os_updates.IsSafeMode()?{return Err(anyhow::anyhow!("safe mode: service start denied"))}service::start(&self.db,&self.config.runtime,p).await}
     pub async fn stop_service(&self,p:&str,g:bool)->Result<()>{service::stop(&self.db,&self.config.runtime,p,g).await}
     pub async fn restart_service(&self,p:&str)->Result<()>{self.stop_service(p,true).await?;self.start_service(p).await}
     pub async fn install_package(&self,p:&str)->Result<String>{install::install(&self.db,&self.config.runtime,p).await}
