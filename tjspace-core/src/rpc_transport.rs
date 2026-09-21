@@ -61,6 +61,8 @@ pub struct RpcEnvelope {
     #[serde(default)]
     pub timestamp: Option<i64>,
     #[serde(default)]
+    pub scopes: Vec<String>,
+    #[serde(default)]
     pub auth_cookie: Option<String>,
     #[serde(default, alias = "X-TJS-Auth-Sig")]
     pub auth_sig: Option<String>,
@@ -378,7 +380,7 @@ impl RpcTransport {
             .ok_or_else(|| anyhow!("X-TJS-Auth-Sig required"))?;
         let public_key = self.load_device_public_key(device_id)?;
         self.ValidateAuthSignature(req, &public_key)?;
-        Ok(Vec::new())
+        Ok(req.scopes.clone())
     }
 
     fn claim_nonce(&self, nonce: &str, now: i64) -> Result<()> {
