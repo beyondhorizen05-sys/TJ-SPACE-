@@ -355,9 +355,10 @@ pub struct SyncQuery {
 }
 
 pub async fn websocket_handler(
-    State(bridge): State<Arc<SyncBridge>>,
+    State(core): State<Arc<crate::Core>>,
     Query(query): Query<SyncQuery>,
 ) -> Response {
+    let bridge = Arc::new(core.sync.clone());
     let result = bridge.OpenSyncSession(&query.client_id, &query.auth_token);
     match result {
         Ok((session_id, _)) => {
