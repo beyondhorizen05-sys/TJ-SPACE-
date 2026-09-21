@@ -62,8 +62,10 @@ pub struct RpcEnvelope {
     pub timestamp: Option<i64>,
     #[serde(default)]
     pub auth_cookie: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "X-TJS-Auth-Sig")]
     pub auth_sig: Option<String>,
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
     #[serde(default)]
     pub trace_id: Option<String>,
 }
@@ -232,7 +234,7 @@ impl RpcTransport {
 
     pub async fn handle_connection<S>(&self, mut stream: S) -> Result<()>
     where
-        S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+        S: AsyncRead + AsyncWrite + Unpin + Send,
     {
         loop {
             let mut header = [0u8; 4];
@@ -368,7 +370,12 @@ impl RpcTransport {
             return Ok(claims.scopes);
         }
 
-        let _signature = req.auth_sig.as_deref().ok_or_else(|| anyhow!("X-TJS-Auth-Sig required"))?;
+        let _signature = req
+            .auth_sig
+            .as_deref()
+            .or_else(|| req.headers.get("X-TJS-Auth-Sig").map(String::as_str))
+            .or_else(|| req.headers.get("x-tjs-auth-sig").map(String::as_str))
+            .ok_or_else(|| anyhow!("X-TJS-Auth-Sig required"))?;
         let public_key = self.load_device_public_key(device_id)?;
         self.ValidateAuthSignature(req, &public_key)?;
         Ok(Vec::new())
@@ -417,7 +424,12 @@ impl RpcTransport {
         if req.jsonrpc != "2.0" {
             bail!("unsupported JSON-RPC version");
         }
-        let sig_text = req.auth_sig.as_deref().ok_or_else(|| anyhow!("X-TJS-Auth-Sig missing"))?;
+        let sig_text = req
+            .auth_sig
+            .as_deref()
+            .or_else(|| req.headers.get("X-TJS-Auth-Sig").map(String::as_str))
+            .or_else(|| req.headers.get("x-tjs-auth-sig").map(String::as_str))
+            .ok_or_else(|| anyhow!("X-TJS-Auth-Sig missing"))?;
         let sig_bytes = decode_binary(sig_text)?;
         let signature = Signature::from_slice(&sig_bytes).map_err(|e| anyhow!("invalid signature: {e}"))?;
         let key_bytes: [u8; 32] = public_key.try_into().map_err(|_| anyhow!("Ed25519 public key must be 32 bytes"))?;
@@ -603,6 +615,7 @@ mod tests {
             timestamp: Some(Utc::now().timestamp()),
             auth_cookie: None,
             auth_sig: None,
+            headers: HashMap::new(),
             trace_id: None,
         };
         let bytes = signing.sign(&signing_bytes(&req).unwrap()).to_bytes();
@@ -649,9 +662,9 @@ mod tests {
         let transport = test_transport();
         let request = RpcEnvelope {
             jsonrpc: "2.0".into(),
-            id: Some(json!(1)),
+            id: Some(serde_json::json!(1)),
             method: "GetSystemState".into(),
-            params: json!({}),
+            params: serde_json::json!({}),
             device_id: None,
             nonce: None,
             timestamp: None,
