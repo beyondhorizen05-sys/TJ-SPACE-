@@ -1,0 +1,29 @@
+name: TJ SPACE System 2 spatial kernel
+
+on:
+  push:
+    paths:
+      - "TJ_SPACE/SpatialWorld/**"
+      - "TJ_SPACE/Config/System2World.ini"
+      - "TJ_SPACE/CI/test_spatial_world_kernel.py"
+      - ".github/workflows/tj-space-system2.yml"
+  pull_request:
+    paths:
+      - "TJ_SPACE/SpatialWorld/**"
+      - "TJ_SPACE/Config/System2World.ini"
+      - "TJ_SPACE/CI/test_spatial_world_kernel.py"
+      - ".github/workflows/tj-space-system2.yml"
+
+jobs:
+  spatial-kernel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate spatial world configuration
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest==8.4.2
+          pytest -q TJ_SPACE/CI/test_spatial_world_kernel.py
