@@ -9,6 +9,7 @@ pub mod patch_db;
 pub mod rpc_transport;
 pub mod container_runtime;
 pub mod registry;
+pub mod registry_server;
 pub mod s9pk;
 pub mod s9pk_toolchain;
 pub mod service;
