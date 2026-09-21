@@ -14,9 +14,9 @@ async fn default_state_and_history_are_empty() {
 #[test]
 fn safe_mode_persists() {
     let d=tempdir().unwrap(); let m=manager(d.path());
-    m.enter_safe_mode().unwrap();
+    m.EnterSafeMode().unwrap();
     assert!(d.path().join("os/os-safe-mode").exists());
-    m.exit_safe_mode().unwrap();
+    m.ExitSafeMode().unwrap();
     assert!(!d.path().join("os/os-safe-mode").exists());
 }
 #[test]
@@ -24,14 +24,14 @@ fn factory_reset_preserves_volume_copy() {
     let d=tempdir().unwrap(); let m=manager(d.path());
     fs::create_dir_all(d.path().join("os/volumes/data")).unwrap();
     fs::write(d.path().join("os/volumes/data/file"),b"x").unwrap();
-    let r=m.factory_reset(true).unwrap();
+    let r=m.FactoryReset(true).unwrap();
     assert!(r.os_wiped);
     assert!(r.preserved_volume_root.join("volumes/data/file").exists());
 }
 #[test]
 fn rollback_rejects_unknown_version() {
     let d=tempdir().unwrap(); let m=manager(d.path());
-    assert!(m.rollback_os("9.9.9").is_err());
+    assert!(m.RollbackOs("9.9.9").is_err());
 }
 #[test]
 fn bundle_validation_requires_daemon() {
