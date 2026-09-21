@@ -1,0 +1,27 @@
+name: TJ SPACE System 3 service embodiment
+
+on:
+  push:
+    paths:
+      - "TJ_SPACE/ServiceEmbodiment/**"
+      - "TJ_SPACE/CI/test_service_embodiment.py"
+      - ".github/workflows/tj-space-system3.yml"
+  pull_request:
+    paths:
+      - "TJ_SPACE/ServiceEmbodiment/**"
+      - "TJ_SPACE/CI/test_service_embodiment.py"
+      - ".github/workflows/tj-space-system3.yml"
+
+jobs:
+  service-embodiment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate System 3 contracts
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest==8.4.2
+          pytest -q TJ_SPACE/CI/test_service_embodiment.py
