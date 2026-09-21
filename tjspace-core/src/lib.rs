@@ -35,6 +35,7 @@ pub struct Config {
     #[serde(default = "default_bind")] pub bind: String,
     #[serde(default)] pub auth_token: String,
     #[serde(default)] pub runtime: RuntimeConfig,
+    #[serde(default)] pub hardware: hardware::HardwareConfig,
     #[serde(default)] pub node_id: String,
     #[serde(default = "default_patch_db")] pub patch_db_path: String,
 }
@@ -81,6 +82,7 @@ pub struct Core {
     pub config:Config,
     pub db:PgPool,
     pub patch_db:patch_db::PatchDb,
+    pub hardware: hardware::HardwareManager,
     handlers:Arc<RwLock<HashMap<String,RpcHandler>>>,
 }
 
@@ -94,7 +96,8 @@ impl Core {
         ).try_init().ok();
         let db=db::connect(&config.database_url).await?;
         db::migrate(&db).await?;let patch_db=patch_db::PatchDb::open_database(&config.patch_db_path)?;
-        let core=Arc::new(Self{config,db,handlers:Arc::new(RwLock::new(HashMap::new())),patch_db});
+        let hardware_config=config.hardware.clone();
+        let core=Arc::new(Self{config,db,patch_db:patch_db.clone(),hardware:hardware::HardwareManager::new(patch_db,hardware_config),handlers:Arc::new(RwLock::new(HashMap::new()))});
         core.register_builtin_methods().await;
         tracing::info!(trace_id=%Uuid::new_v4(),service_id="tjsd","core_initialized");
         Ok(core)
@@ -141,7 +144,15 @@ impl Core {
     pub async fn sign_artifact(&self,b:&[u8],k:&[u8])->Result<Vec<u8>>{sign::sign(b,k)}
     pub async fn verify_artifact(&self,b:&[u8],s:&[u8])->Result<()> {sign::verify(b,s)}
 
-    async fn register_builtin_methods(self:&Arc<Self>){let c=self.clone();self.register_rpc_method("ApplyPatch",move|r|{let c=c.clone();async move{let p:patch_db::Patch=serde_json::from_value(r.params)?;Ok(serde_json::to_value(c.patch_db.apply_patch(p)?)?)}}).await;
+    async fn register_builtin_methods(self:&Arc<Self>){
+        let c=self.clone();self.register_rpc_method("EnumerateDisks",move|_|{let c=c.clone();async move{Ok(serde_json::to_value(c.hardware.EnumerateDisks().await?)?)}}).await;
+        let c=self.clone();self.register_rpc_method("GetDiskHealth",move|r|{let c=c.clone();async move{let id=r.params["disk_id"].as_str().ok_or_else(||anyhow::anyhow!("disk_id required"))?;Ok(serde_json::to_value(c.hardware.GetDiskHealth(id).await?)?)}}).await;
+        let c=self.clone();self.register_rpc_method("GetSystemHardware",move|_|{let c=c.clone();async move{Ok(serde_json::to_value(c.hardware.GetSystemHardware().await?)?)}}).await;
+        let c=self.clone();self.register_rpc_method("ScanWifiNetworks",move|_|{let c=c.clone();async move{Ok(serde_json::to_value(c.hardware.ScanWifiNetworks().await?)?)}}).await;
+        let c=self.clone();self.register_rpc_method("GetDrivers",move|_|{let c=c.clone();async move{Ok(serde_json::to_value(c.hardware.GetDrivers().await?)?)}}).await;
+        let c=self.clone();self.register_rpc_method("RequestHardwareConfirmation",move|r|{let c=c.clone();async move{let op=r.params["operation"].as_str().ok_or_else(||anyhow::anyhow!("operation required"))?;let resource=r.params["resource"].as_str().ok_or_else(||anyhow::anyhow!("resource required"))?;Ok(serde_json::to_value(c.hardware.request_confirmation(op,resource)?)?)}}).await;
+        let c=self.clone();self.register_rpc_method("ConfirmHardwareOperation",move|r|{let c=c.clone();async move{let id=r.params["operation_id"].as_str().ok_or_else(||anyhow::anyhow!("operation_id required"))?;c.hardware.confirm_destructive_operation(id)?;Ok(json!({"confirmed":id}))}}).await;
+let c=self.clone();self.register_rpc_method("ApplyPatch",move|r|{let c=c.clone();async move{let p:patch_db::Patch=serde_json::from_value(r.params)?;Ok(serde_json::to_value(c.patch_db.apply_patch(p)?)?)}}).await;
         let c=self.clone();self.register_rpc_method("GetSystemState",move|_|{let c=c.clone();async move{Ok(serde_json::to_value(c.get_system_state().await?)?)}}).await;
         let c=self.clone();self.register_rpc_method("StartService",move|r|{let c=c.clone();async move{let p=r.params["package_id"].as_str().ok_or_else(||anyhow::anyhow!("package_id required"))?;c.start_service(p).await?;Ok(json!({"started":p}))}}).await;
         let c=self.clone();self.register_rpc_method("StopService",move|r|{let c=c.clone();async move{let p=r.params["package_id"].as_str().ok_or_else(||anyhow::anyhow!("package_id required"))?;let g=r.params["graceful"].as_bool().unwrap_or(true);c.stop_service(p,g).await?;Ok(json!({"stopped":p,"graceful":g}))}}).await;
