@@ -113,7 +113,10 @@ impl RegistryServer {
         } else {
             let mut seed=[0u8;32]; let mut f=File::open("/dev/urandom").context("catalog key unavailable; configure catalog_private_key_hex")?; f.read_exact(&mut seed)?; SigningKey::from_bytes(&seed)
         };
-        Ok(Self { config, records:Arc::new(Mutex::new(Vec::new())), revision:Arc::new(Mutex::new(0)), buckets:Arc::new(Mutex::new(HashMap::new())), catalog_key:Arc::new(key) })
+        let catalog_path=PathBuf::from(&config.storage_dir).join("catalog.json");
+        let persisted:Vec<PackageRecord>=if catalog_path.exists(){serde_json::from_slice(&fs::read(&catalog_path)?)?}else{Vec::new()};
+        let revision=persisted.len() as u64;
+        Ok(Self { config, records:Arc::new(Mutex::new(persisted)), revision:Arc::new(Mutex::new(revision)), buckets:Arc::new(Mutex::new(HashMap::new())), catalog_key:Arc::new(key) })
     }
 
     pub fn publish_package(&self, s9pk_path: &str, publisher_key: &[u8]) -> Result<PackageRecord> {
@@ -137,6 +140,8 @@ impl RegistryServer {
         if records.iter().any(|r|r.package_id==id && r.version==version) { bail!("package version already published"); }
         records.push(record.clone());
         *self.revision.lock().unwrap() += 1;
+        let catalog_path=PathBuf::from(&self.config.storage_dir).join("catalog.json");
+        fs::write(catalog_path,serde_json::to_vec_pretty(&*records)?)?;
         Ok(record)
     }
 
@@ -165,7 +170,9 @@ impl RegistryServer {
         if reason.trim().is_empty(){bail!("deprecation reason required")}
         let mut records=self.records.lock().unwrap();
         let r=records.iter_mut().find(|r|r.package_id==package_id&&r.version==version).ok_or_else(||anyhow::anyhow!("package version not found"))?;
-        r.deprecated=true; r.deprecation_reason=Some(reason.to_owned()); *self.revision.lock().unwrap()+=1; Ok(())
+        r.deprecated=true; r.deprecation_reason=Some(reason.to_owned()); *self.revision.lock().unwrap()+=1;
+        let catalog_path=PathBuf::from(&self.config.storage_dir).join("catalog.json");
+        fs::write(catalog_path,serde_json::to_vec_pretty(&*records)?)?; Ok(())
     }
     pub fn search_catalog(&self, query:&str)->Result<Vec<PackageRecord>>{
         let q=query.trim().to_lowercase();
@@ -232,7 +239,7 @@ async fn http_artifact(State(s):State<Arc<RegistryServer>>,headers:HeaderMap,Pat
 #[derive(Debug,Deserialize)] struct PublishRequest{s9pk_base64:String,publisher_key_hex:String}
 #[derive(Debug,Deserialize)] struct DeprecationRequest{reason:String}
 
-fn read_manifest_json(path:&str)->Result<Value>{let body=crate::s9pk_toolchain::extract_partial(path,0..u64::MAX)?;let mut ar=Archive::new(body.as_slice());for e in ar.entries()?{let mut e=e?;if e.path()?.to_string_lossy()=="startos/manifest/manifest.json"{let mut b=Vec::new();e.read_to_end(&mut b)?;return Ok(serde_json::from_slice(&b)?);}}bail!("manifest not found")}
+fn read_manifest_json(path:&str)->Result<Value>{let all=fs::read(path)?;if all.len()<15||all[..3]!=crate::s9pk_toolchain::S9PK_HEADER{bail!("invalid S9PK")}let mut p=3;if &all[p..p+4]!=b"S9IX"{bail!("invalid S9PK index")}p+=4;let mut n=[0u8;8];n.copy_from_slice(&all[p..p+8]);p+=8;let ilen=u64::from_le_bytes(n) as usize;if p+ilen>all.len(){bail!("truncated S9PK")}p+=ilen;let footer=all.windows(4).rposition(|w|w==b"S9SG").context("footer missing")?;if footer<p{bail!("invalid S9PK sections")}let body=&all[p..footer];let mut ar=Archive::new(body);for e in ar.entries()?{let mut e=e?;if e.path()?.to_string_lossy()=="startos/manifest/manifest.json"{let mut b=Vec::new();e.read_to_end(&mut b)?;return Ok(serde_json::from_slice(&b)?);}}bail!("manifest not found")}
 fn read_package_signature(path:&str)->Result<String>{let bytes=fs::read(path)?;let pos=bytes.windows(4).rposition(|w|w==b"S9SG").context("signature footer missing")?;if pos+12>bytes.len(){bail!("truncated signature footer")}let mut n=[0u8;8];n.copy_from_slice(&bytes[pos+4..pos+12]);let len=u64::from_le_bytes(n) as usize;if pos+12+len>bytes.len(){bail!("invalid signature footer length")}let v:Value=serde_json::from_slice(&bytes[pos+12..pos+12+len])?;Ok(v["signature"].as_str().context("signature missing")?.to_owned())}
 fn matches_filter(r:&PackageRecord,f:&CatalogFilter)->bool{
     let q=f.query.as_deref().unwrap_or("").to_lowercase();
