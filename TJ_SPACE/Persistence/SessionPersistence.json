@@ -1,0 +1,11 @@
+{
+  "version":"1.0.0",
+  "system":32,
+  "kind":"save-load-session-persistence",
+  "storage":{"sessions":"Saved/TJ_SPACE/Sessions/<clientId>.sav.json","worldSnapshots":"Saved/TJ_SPACE/WorldSnapshots/<snapshotId>.json"},
+  "session":{"schemaVersion":1,"fields":["clientId","bookmarks","history","uiStateJson","savedAtUtc"]},
+  "worldSnapshot":{"schemaVersion":1,"kind":"tjs.world-interface-snapshot","captures":["worldId","streamingOrigin","environmentHealth","registeredSpatialEntityTransforms","districtStreamingState"],"excludes":["service-data-backup","container-filesystem-backup","backend-database-backup"]},
+  "bookmarks":{"identity":"clientId + name","overwriteOnDuplicateName":true},
+  "restore":{"failClosedOnCorruptSnapshot":true,"actorResolution":"System 14 backend-id registry","teleportPhysics":true},
+  "integration":{"systems":"13-31","serviceBackupSeparation":"System 21 remains authoritative for backend service data"}
+}
