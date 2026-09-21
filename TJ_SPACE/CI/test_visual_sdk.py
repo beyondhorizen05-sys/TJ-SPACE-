@@ -10,7 +10,7 @@ def test_api():
  h=(R/"SDK"/"VisualExtensionSDK.h").read_text()
  for n in D["functions"]: assert n in h
 def test_validator(): 
- from SDK.VisualCompliance import ValidateVisualCompliance
+ from TJ_SPACE.SDK.VisualCompliance import ValidateVisualCompliance
  assert not ValidateVisualCompliance({"mod_id":"bad","signature":"x","assets":["pixel art"]})["compliant"]
 def test_no_forward_refs():
  for p in [R/"SDK"/"README.md",R/"SDK"/"VisualExtensionSDK.json"]:
