@@ -411,7 +411,7 @@ impl HardwareManager {
                 run_checked("lvextend", &["-L", &size_arg, &volume.device], self.config.command_timeout_seconds).await?;
                 grow_fs(&volume.filesystem, &volume.device).await?;
             } else {
-                shrink_fs(&volume.filesystem, &volume.device).await?;
+                shrink_fs(&volume.filesystem, &volume.device, new_size).await?;
                 run_checked("lvreduce", &["-L", &size_arg, "--yes", &volume.device], self.config.command_timeout_seconds).await?;
             }
         }
