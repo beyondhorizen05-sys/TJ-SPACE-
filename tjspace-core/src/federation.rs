@@ -456,6 +456,6 @@ mod tests {
     fn mdns_query_contains_service_question() {
         let q=mdns_ptr_query(SERVICE);
         assert_eq!(u16::from_be_bytes([q[4],q[5]]),1);
-        assert!(q.windows(8).any(|w| w==b"_tjspace"));
+        assert!(q.windows(8).any(|w| w==b"_tjspace".as_slice()));
     }
 }
