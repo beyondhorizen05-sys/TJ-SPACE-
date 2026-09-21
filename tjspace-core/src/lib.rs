@@ -1,4 +1,5 @@
 pub mod backup;
+pub mod bins;
 pub mod db;
 pub mod install;
 pub mod lxc;
@@ -144,7 +145,7 @@ impl Core {
 
     pub async fn serve(self:Arc<Self>)->Result<()>{
         let app=Router::new().route("/api/v1/health",get(health)).route("/api/v1/rpc",post(rpc_http))
-            .with_state(self.clone()).layer(tower_http::trace::TraceLayer::new_for_http());
+            .with_state(self.clone()).layer(tower_http::trace::TraceLayer::new_for_http().make_span_with(|request: &axum::http::Request<axum::body::Body>| { let trace_id=request.headers().get("x-trace-id").and_then(|v|v.to_str().ok()).unwrap_or("generated"); tracing::info_span!("http_request",trace_id=%trace_id,service_id="tjsd",method=%request.method(),uri=%request.uri()) }));
         let listener=tokio::net::TcpListener::bind(&self.config.bind).await?;
         tracing::info!(trace_id=%Uuid::new_v4(),service_id="tjsd",bind=%self.config.bind,"rpc_server_started");
         axum::serve(listener,app).await?;
