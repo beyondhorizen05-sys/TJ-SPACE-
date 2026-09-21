@@ -1,9 +1,11 @@
 #include "SpatialWorldKernel.h"
 
 #include "Components/PrimitiveComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/World.h"
 #include "GameFramework/WorldSettings.h"
 #include "HAL/FileManager.h"
+#include "Misc/Paths.h"
 #include "Misc/FileHelper.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
