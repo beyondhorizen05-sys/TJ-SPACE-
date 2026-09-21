@@ -1,0 +1,16 @@
+name: auto-fix-loop
+on:
+  push:
+    branches: [auto-fix-loop]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo check
+        run: cargo check --manifest-path tjspace-core/Cargo.toml --message-format=short
+      - name: cargo test build
+        run: cargo test --manifest-path tjspace-core/Cargo.toml --no-run
+      - name: cargo test list
+        run: cargo test --manifest-path tjspace-core/Cargo.toml -- --list
