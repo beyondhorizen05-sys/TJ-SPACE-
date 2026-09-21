@@ -34,7 +34,7 @@ pub fn issue_jwt(secret:&str,subject:&str,scope:&str,ttl:u64)->Result<String>{
     let mut mac=HmacSha256::new_from_slice(secret.as_bytes())?;mac.update(input.as_bytes());
     Ok(format!("{input}.{}",b64(&mac.finalize().into_bytes())))
 }
-fn verify_jwt(secret:&str,token:&str)->Result<JwtClaims>{
+macro_rules! bail_auth {()=>{return Err(anyhow!("invalid JWT"))};}\nfn verify_jwt(secret:&str,token:&str)->Result<JwtClaims>{
     let p:Vec<_>=token.split('.').collect();if p.len()!=3{bail_auth!();}
     let input=format!("{}.{}",p[0],p[1]);let mut mac=HmacSha256::new_from_slice(secret.as_bytes()).map_err(|_|anyhow!("JWT secret invalid"))?;
     mac.update(input.as_bytes());let sig=URL_SAFE_NO_PAD.decode(p[2])?;mac.verify_slice(&sig).map_err(|_|anyhow!("invalid JWT"))?;
@@ -66,7 +66,7 @@ pub async fn register_rpc(core:&Arc<Core>){
     let c=core.clone();core.register_rpc_method("DeviceRevoke",move|r|{let c=c.clone();async move{let id=r.params["device_id"].as_str().ok_or_else(||anyhow!("device_id required"))?;let key=format!("devices.{}",id);c.patch_db.apply_patch(crate::patch_db::Patch{version:1,path:key,op:crate::patch_db::PatchOp::Set,value:Some(json!({"device_id":id,"status":"revoked","revoked_at":chrono::Utc::now()})),actor:"tjsd".into(),authorization:"allow".into()})?;Ok(json!({"device_id":id,"revoked":true}))}}).await;
     let c=core.clone();core.register_rpc_method("DeviceList",move|_|{let c=c.clone();async move{Ok(c.patch_db.get_snapshot()?.state.get("devices").cloned().unwrap_or(json!({})))}}).await;
     let c=core.clone();core.register_rpc_method("DiagDump",move|_|{let c=c.clone();async move{Ok(serde_json::to_value(c.patch_db.get_snapshot()?)?)}}).await;
-    let c=core.clone();core.register_rpc_method("DiagRestore",move|r|{let c=c.clone();async move{let snap:r#serde_json::Value=r.params["snapshot"].clone();let obj=snap.get("state").cloned().unwrap_or(snap);for (k,v) in flatten_json("",&obj){if !k.is_empty(){c.patch_db.apply_patch(crate::patch_db::Patch{version:1,path:k,op:crate::patch_db::PatchOp::Set,value:Some(v),actor:"tjsd".into(),authorization:"allow".into()})?;}}Ok(json!({"restored":true}))}}).await;
+    let c=core.clone();core.register_rpc_method("DiagRestore",move|r|{let c=c.clone();async move{let snap:serde_json::Value=r.params["snapshot"].clone();let obj=snap.get("state").cloned().unwrap_or(snap);for (k,v) in flatten_json("",&obj){if !k.is_empty(){c.patch_db.apply_patch(crate::patch_db::Patch{version:1,path:k,op:crate::patch_db::PatchOp::Set,value:Some(v),actor:"tjsd".into(),authorization:"allow".into()})?;}}Ok(json!({"restored":true}))}}).await;
 }
 
 fn flatten_json(prefix:&str,v:&Value)->Vec<(String,Value)>{let mut out=Vec::new();match v{Value::Object(m)=>for(k,x)in m{let p=if prefix.is_empty(){k.clone()}else{format!("{prefix}.{k}")};out.extend(flatten_json(&p,x));},_=>out.push((prefix.into(),v.clone()))}out}
