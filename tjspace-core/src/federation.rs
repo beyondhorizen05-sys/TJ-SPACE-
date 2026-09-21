@@ -5,8 +5,7 @@ use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::{collections::HashMap, net::{IpAddr, Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, sync::{Arc, RwLock}, time::{Duration, SystemTime, UNIX_EPOCH}};
-use tokio::{net::UdpSocket, time::timeout};
+use std::{collections::HashMap, net::{Ipv4Addr}, path::{Path, PathBuf}, sync::{Arc, RwLock}, time::{Duration, SystemTime, UNIX_EPOCH}};
 use uuid::Uuid;
 use x25519_dalek::{PublicKey as XPublicKey, StaticSecret};
 
@@ -415,6 +414,7 @@ fn save_peers(path:&Path, peers:&HashMap<String,Peer>)->Result<()>{
 
 fn discover_mdns(timeout_ms:u64, default_port:u16)->Result<Vec<Peer>>{
     let socket=std::net::UdpSocket::bind(("0.0.0.0",0))?;
+    socket.join_multicast_v4(&Ipv4Addr::new(224,0,0,251), &Ipv4Addr::UNSPECIFIED)?;
     socket.set_read_timeout(Some(Duration::from_millis(timeout_ms)))?;
     let query=mdns_ptr_query(SERVICE);
     socket.send_to(&query,MDNS_ADDR)?;
