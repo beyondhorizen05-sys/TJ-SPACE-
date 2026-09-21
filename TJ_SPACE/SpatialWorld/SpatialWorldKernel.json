@@ -1,20 +1,23 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "world": {
     "units": "centimeters",
-    "origin": [0, 0, 0],
-    "coordinateSystem": "right-handed-z-up"
+    "coordinateSystem": "right-handed-z-up",
+    "origin": [0, 0, 0]
   },
-  "streaming": {
-    "enabled": true,
-    "cellSize": 25600,
-    "loadingRange": 76800
+  "citadel": {
+    "worldId": "citadel",
+    "streamingEnabled": true,
+    "districtCellSize": 25600,
+    "districtLoadingRange": 76800
   },
-  "zones": [
-    {
-      "id": "core",
-      "center": [0, 0, 0],
-      "extent": [12800, 12800, 8000]
-    }
-  ]
+  "entities": [],
+  "districts": [
+    {"id": "district_0_0", "x": 0, "y": 0, "loaded": true}
+  ],
+  "environment": {
+    "health01": 1.0,
+    "load01": 0.0,
+    "fault01": 0.0
+  }
 }
