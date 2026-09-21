@@ -1,13 +1,13 @@
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::Duration,
 };
-use tokio::{process::Command, time::{sleep, timeout}};
+use tokio::{process::Command, time::timeout};
 
 const DEFAULT_TIMEOUT_SECS: u64 = 30;
 const DEFAULT_HEALTH_INTERVAL_MS: u64 = 5000;
@@ -46,9 +46,9 @@ pub struct ResourceLimits {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum HealthCheckSpec {
-    Tcp { host: String, port: u16 },
-    Http { url: String, #[serde(default = "default_http_success")] expected_status: u16 },
-    Script { command: String, #[serde(default)] args: Vec<String> },
+    Tcp { host: String, port: u16, #[serde(default)] policy: HealthPolicy },
+    Http { url: String, #[serde(default = "default_http_success")] expected_status: u16, #[serde(default)] policy: HealthPolicy },
+    Script { command: String, #[serde(default)] args: Vec<String>, #[serde(default)] policy: HealthPolicy },
 }
 fn default_http_success() -> u16 { 200 }
 
@@ -192,9 +192,11 @@ impl ContainerRuntime {
             bail!("javascript.squashfs does not exist: {js_path}");
         }
         let mountpoint = "/opt/tjspace/package";
+        self.run("lxc", &["config", "device", "add", container_id, "tjs-javascript", "disk",
+            &format!("source={js_path}"), "path=/opt/tjspace/package.squashfs", "readonly=true"]).await?;
         self.run("lxc", &["exec", container_id, "--", "mkdir", "-p", mountpoint]).await?;
         self.run("lxc", &[
-            "exec", container_id, "--", "mount", "-o", "loop,ro", js_path, mountpoint,
+            "exec", container_id, "--", "mount", "-o", "loop,ro", "/opt/tjspace/package.squashfs", mountpoint,
         ]).await?;
         if !self.config.dry_run {
             self.run("lxc", &[
@@ -208,20 +210,18 @@ impl ContainerRuntime {
         validate_container_id(container_id)?;
         validate_id(sub_name)?;
         let pidfile = format!("/run/tjspace-sub-{sub_name}.pid");
-        let env_json = serde_json::to_string(&spec.env)?;
-        self.run("lxc", &[
-            "exec", container_id, "--", "sh", "-c",
-            "exec env "$TJSPACE_SUB_ENV" "$TJSPACE_SUB_COMMAND" "$@" > /dev/null 2>&1 & echo $! > "$TJSPACE_SUB_PIDFILE"",
-        ]).await?;
-        if self.config.dry_run {
-            return Ok(());
+        let mut env_prefix = String::new();
+        for (key, value) in &spec.env {
+            validate_env_key(key)?;
+            env_prefix.push_str(" ");
+            env_prefix.push_str(key);
+            env_prefix.push('=');
+            env_prefix.push_str(&shell_quote(value));
         }
-        self.run("lxc", &[
-            "exec", container_id, "--", "sh", "-c",
-            &format!("TJSPACE_SUB_ENV='{}' TJSPACE_SUB_COMMAND='{}' TJSPACE_SUB_PIDFILE='{}' sh -c 'exec "$TJSPACE_SUB_COMMAND" "$@"' sh {}",
-                shell_quote(&env_json), shell_quote(&spec.command), shell_quote(&pidfile),
-                spec.args.iter().map(|a| shell_quote(a)).collect::<Vec<_>>().join(" ")),
-        ]).await?;
+        let mut command = format!("env{env_prefix} {} ", shell_quote(&spec.command));
+        command.push_str(&spec.args.iter().map(|a| shell_quote(a)).collect::<Vec<_>>().join(" "));
+        let shell = format!("({command}) >/dev/null 2>&1 & echo $! > {}", shell_quote(&pidfile));
+        self.run("lxc", &["exec", container_id, "--", "sh", "-c", &shell]).await?;
         Ok(())
     }
 
@@ -238,13 +238,15 @@ impl ContainerRuntime {
     pub async fn poll_health_check(&self, container_id: &str, check_spec: &HealthCheckSpec) -> Result<HealthResult> {
         validate_container_id(container_id)?;
         let key = format!("{}:{:?}", container_id, check_spec);
-        let policy = HealthPolicy::default();
+        let policy = match check_spec {
+            HealthCheckSpec::Tcp { policy, .. } | HealthCheckSpec::Http { policy, .. } | HealthCheckSpec::Script { policy, .. } => policy,
+        };
         let delay = self.health_backoff.lock().ok().and_then(|m| m.get(&key).copied()).unwrap_or(policy.interval_ms);
         let start = std::time::Instant::now();
         let result = match check_spec {
-            HealthCheckSpec::Tcp { host, port } => self.health_tcp(host, *port, policy.timeout_ms).await,
-            HealthCheckSpec::Http { url, expected_status } => self.health_http(url, *expected_status, policy.timeout_ms).await,
-            HealthCheckSpec::Script { command, args } => self.health_script(command, args, policy.timeout_ms).await,
+            HealthCheckSpec::Tcp { host, port, .. } => self.health_tcp(host, *port, policy.timeout_ms).await,
+            HealthCheckSpec::Http { url, expected_status, .. } => self.health_http(url, *expected_status, policy.timeout_ms).await,
+            HealthCheckSpec::Script { command, args, .. } => self.health_script(command, args, policy.timeout_ms).await,
         };
         let latency_ms = start.elapsed().as_millis() as u64;
         let healthy = result.is_ok();
@@ -395,6 +397,13 @@ impl Default for HealthPolicy {
     }
 }
 
+fn validate_env_key(value: &str) -> Result<()> {
+    if value.is_empty() || !value.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_') {
+        bail!("invalid environment variable name");
+    }
+    Ok(())
+}
+
 fn validate_id(value: &str) -> Result<()> {
     if value.is_empty() || value.len() > 128 || !value.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.') {
         bail!("invalid identifier");
@@ -442,7 +451,7 @@ mod tests {
         let mut cfg = crate::RuntimeConfig::default();
         cfg.dry_run = true;
         let rt = ContainerRuntime::with_root(cfg, "/tmp/tjspace-test");
-        let check = HealthCheckSpec::Tcp { host: "127.0.0.1".into(), port: 1 };
+        let check = HealthCheckSpec::Tcp { host: "127.0.0.1".into(), port: 1, policy: HealthPolicy::default() };
         let result = rt.poll_health_check("tjs-demo", &check).await.unwrap();
         assert!(!result.healthy);
         assert!(result.next_delay_ms <= DEFAULT_BACKOFF_MAX_MS);
