@@ -1,0 +1,26 @@
+name: TJ SPACE System 12 State Synchronization
+on:
+  push:
+    paths:
+      - "tjspace-core/src/state_sync.rs"
+      - "tjspace-core/src/lib.rs"
+      - "tjspace-core/Cargo.toml"
+      - "tjspace-core/build.rs"
+      - "tjspace-core/proto/state_sync.proto"
+      - "tjspace-core/tests/state_sync.rs"
+      - ".github/workflows/tj-space-system12-state-sync.yml"
+  pull_request:
+    paths:
+      - "tjspace-core/src/state_sync.rs"
+      - "tjspace-core/src/lib.rs"
+      - "tjspace-core/Cargo.toml"
+      - "tjspace-core/build.rs"
+      - "tjspace-core/proto/state_sync.proto"
+      - "tjspace-core/tests/state_sync.rs"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --manifest-path tjspace-core/Cargo.toml
