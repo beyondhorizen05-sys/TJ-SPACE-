@@ -1,0 +1,8 @@
+{
+ "version":"1.0.0",
+ "strategies":["LAN","Tor","Clearnet","WireGuard"],
+ "layers":{"streets":"LAN","subterraneanTunnels":"Tor","openWorldBridge":"Clearnet","privateRoads":"WireGuard","tlsShields":"TLS","dnsBeams":"DNS","trafficPulses":"Traffic"},
+ "torMode":{"lighting":"reduced directional visibility","audio":"spatialized occlusion and reduced high-frequency clarity","fog":"increased localized volumetric density"},
+ "trafficRule":"traffic is represented as discrete light pulses on a selected network layer; strategy layers may coexist",
+ "construction":{"enableDisable":true,"blendSeconds":1.25}
+}
