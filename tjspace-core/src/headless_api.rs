@@ -121,7 +121,7 @@ fn rpc_for_path(path:&str)->Option<String>{
 
 #[derive(Parser,Debug)]
 #[command(name="tjspace-cli",version,about="TJ SPACE headless control CLI")]
-pub struct Cli{#[arg(long,default_value="http://127.0.0.1:8090")]pub endpoint:String,#[arg(long)]pub token:Option<String>,#[arg(long)]pub jwt_secret:Option<String>,#[arg(long)]pub json:bool,#[arg(long)]pub quiet:bool,#[command(subcommand)]pub command:CliCommand}
+pub struct Cli{#[arg(long,global=true,default_value="http://127.0.0.1:8090")]pub endpoint:String,#[arg(long,global=true)]pub token:Option<String>,#[arg(long,global=true)]pub jwt_secret:Option<String>,#[arg(long,global=true)]pub json:bool,#[arg(long,global=true)]pub quiet:bool,#[command(subcommand)]pub command:CliCommand}
 #[derive(Subcommand,Debug)]
 pub enum CliCommand{
  Status,
