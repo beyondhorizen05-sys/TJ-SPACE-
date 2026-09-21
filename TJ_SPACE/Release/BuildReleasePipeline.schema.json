@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"tjspace://system34/release","type":"object","required":["version","system","targets","rustBinaries","ci","release"],"properties":{"version":{"const":"1.0.0"},"system":{"const":34},"targets":{"type":"array","minItems":3},"rustBinaries":{"type":"array"},"ci":{"type":"object"},"release":{"type":"object"}}}
