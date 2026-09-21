@@ -3,6 +3,9 @@
 #include "GameFramework/Actor.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/PointLightComponent.h"
+#include "Components/AudioComponent.h"
+#include "Components/ExponentialHeightFogComponent.h"
 #include "NetworkingTerrain.generated.h"
 
 UENUM(BlueprintType)
@@ -61,6 +64,10 @@ public:
 private:
  UPROPERTY() TObjectPtr<USceneComponent> Root;
  UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> LANStreets,TorTunnels,ClearnetBridges,VPNRoads,TLSShields,DNSBeams,TrafficPulses;
+ UPROPERTY() TObjectPtr<UPointLightComponent> TorLight;
+ UPROPERTY() TObjectPtr<UAudioComponent> TorAudio;
+ UPROPERTY() TObjectPtr<UExponentialHeightFogComponent> TorFog;
+ void SetLayerConstruction(TArray<TObjectPtr<UStaticMeshComponent>>& Layer,bool bEnabled);
  FTJNetworkStrategyConfig Config; bool bTorEntered=false; float ConstructionAlpha=1.0f; float PulsePhase=0.0f;
  void SetScalar(UPrimitiveComponent* C,FName P,float V) const;
  void BuildSegment(TArray<TObjectPtr<UStaticMeshComponent>>& Target,const FVector& Loc,const FVector& Scale,FName Marker,float Value=1.0f);
