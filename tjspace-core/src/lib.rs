@@ -6,7 +6,7 @@ pub mod hardware;
 pub mod lxc;
 pub mod net;
 pub mod os_install;
-pub mod os_installer;
+pub mod os_installer;\npub mod os_updates;
 pub mod patch_db;
 pub mod rpc_transport;
 pub mod container_runtime;
@@ -38,7 +38,7 @@ pub struct Config {
     #[serde(default)] pub runtime: RuntimeConfig,
     #[serde(default)] pub hardware: hardware::HardwareConfig,
     #[serde(default)] pub node_id: String,
-    #[serde(default = "default_patch_db")] pub patch_db_path: String,
+    #[serde(default = "default_patch_db")] pub patch_db_path: String,\n    #[serde(default)] pub os_updates: os_updates::OsUpdateConfig,
 }
 fn default_bind()->String{"127.0.0.1:8090".into()}
 fn default_patch_db()->String{"tjspace-state.db".into()}
@@ -84,7 +84,7 @@ pub struct Core {
     pub db:PgPool,
     pub patch_db:patch_db::PatchDb,
     pub hardware: hardware::HardwareManager,
-    pub installer: os_installer::OsInstaller,
+    pub installer: os_installer::OsInstaller,\n    pub os_updates: os_updates::OsUpdateManager,
     handlers:Arc<RwLock<HashMap<String,RpcHandler>>>,
 }
 
@@ -99,8 +99,8 @@ impl Core {
         let db=db::connect(&config.database_url).await?;
         db::migrate(&db).await?;let patch_db=patch_db::PatchDb::open_database(&config.patch_db_path)?;
         let hardware_config=config.hardware.clone();
-        let installer=os_installer::OsInstaller::new(patch_db.clone(),os_installer::InstallerConfig{dry_run:config.runtime.dry_run,command_timeout_seconds:config.runtime.command_timeout_seconds,live_mode_required:true});
-        let core=Arc::new(Self{config,db,patch_db:patch_db.clone(),hardware:hardware::HardwareManager::new(patch_db,hardware_config),installer,handlers:Arc::new(RwLock::new(HashMap::new()))});
+        let installer=os_installer::OsInstaller::new(patch_db.clone(),os_installer::InstallerConfig{dry_run:config.runtime.dry_run,command_timeout_seconds:config.runtime.command_timeout_seconds,live_mode_required:true});\n        let os_updates=os_updates::OsUpdateManager::new(patch_db.clone(), config.os_updates.clone());\n        let _=os_updates.RecoverFailedBoot();
+        let core=Arc::new(Self{config,db,patch_db:patch_db.clone(),hardware:hardware::HardwareManager::new(patch_db.clone(),hardware_config),installer,os_updates,handlers:Arc::new(RwLock::new(HashMap::new()))});
         core.register_builtin_methods().await;
         tracing::info!(trace_id=%Uuid::new_v4(),service_id="tjsd","core_initialized");
         Ok(core)
@@ -157,7 +157,7 @@ impl Core {
         let c=self.clone();self.register_rpc_method("VerifyInstallation",move|_|{let c=c.clone();async move{Ok(serde_json::to_value(c.installer.verify_installation().await?)?)}}).await;
         let c=self.clone();self.register_rpc_method("RequestInstallerConfirmation",move|r|{let c=c.clone();async move{let op=r.params["operation"].as_str().ok_or_else(||anyhow::anyhow!("operation required"))?;let res=r.params["resource"].as_str().ok_or_else(||anyhow::anyhow!("resource required"))?;Ok(json!({"operation_id":c.installer.request_confirmation(op,res)?}))}}).await;
         let c=self.clone();self.register_rpc_method("ConfirmInstallerOperation",move|r|{let c=c.clone();async move{let id=r.params["operation_id"].as_str().ok_or_else(||anyhow::anyhow!("operation_id required"))?;c.installer.confirm(id)?;Ok(json!({"confirmed":true}))}}).await;
-        let c=self.clone();self.register_rpc_method("EnumerateDisks",move|_|{let c=c.clone();async move{Ok(serde_json::to_value(c.hardware.EnumerateDisks().await?)?)}}).await;
+        let c=self.clone();self.register_rpc_method("CheckForOsUpdate",move|_|{let c=c.clone();async move{Ok(serde_json::to_value(c.os_updates.CheckForOsUpdate().await?)?)}}).await;\n        let c=self.clone();self.register_rpc_method("DownloadOsUpdate",move|r|{let c=c.clone();async move{let id=r.params["release_id"].as_str().ok_or_else(||anyhow::anyhow!("release_id required"))?;Ok(json!({"path":c.os_updates.DownloadOsUpdate(id).await?.display().to_string()}))}}).await;\n        let c=self.clone();self.register_rpc_method("VerifyOsUpdate",move|r|{let c=c.clone();async move{let id=r.params["release_id"].as_str().ok_or_else(||anyhow::anyhow!("release_id required"))?;Ok(json!({"verified":c.os_updates.VerifyOsUpdate(id).await?}))}}).await;\n        let c=self.clone();self.register_rpc_method("ApplyOsUpdate",move|r|{let c=c.clone();async move{let id=r.params["release_id"].as_str().ok_or_else(||anyhow::anyhow!("release_id required"))?;Ok(serde_json::to_value(c.os_updates.ApplyOsUpdate(id).await?)?)}}).await;\n        let c=self.clone();self.register_rpc_method("EnterSafeMode",move|_|{let c=c.clone();async move{c.os_updates.EnterSafeMode()?;Ok(json!({"safe_mode":true}))}}).await;\n        let c=self.clone();self.register_rpc_method("ExitSafeMode",move|_|{let c=c.clone();async move{c.os_updates.ExitSafeMode()?;Ok(json!({"safe_mode":false}))}}).await;\n        let c=self.clone();self.register_rpc_method("FactoryReset",move|r|{let c=c.clone();async move{let p=r.params["preserve_data"].as_bool().unwrap_or(false);Ok(serde_json::to_value(c.os_updates.FactoryReset(p)?)?)}}).await;\n        let c=self.clone();self.register_rpc_method("RollbackOs",move|r|{let c=c.clone();async move{let v=r.params["target_version"].as_str().ok_or_else(||anyhow::anyhow!("target_version required"))?;c.os_updates.RollbackOs(v)?;Ok(json!({"rolled_back_to":v}))}}).await;\n        let c=self.clone();self.register_rpc_method("GetUpdateHistory",move|_|{let c=c.clone();async move{Ok(serde_json::to_value(c.os_updates.GetUpdateHistory()?)?)}}).await;\n        let c=self.clone();self.register_rpc_method("BootHealthAck",move|r|{let c=c.clone();async move{let v=r.params["version"].as_str().ok_or_else(||anyhow::anyhow!("version required"))?;c.os_updates.BootHealthAck(v)?;Ok(json!({"acknowledged":true}))}}).await;\n        let c=self.clone();self.register_rpc_method("EnumerateDisks",move|_|{let c=c.clone();async move{Ok(serde_json::to_value(c.hardware.EnumerateDisks().await?)?)}}).await;
         let c=self.clone();self.register_rpc_method("GetDiskHealth",move|r|{let c=c.clone();async move{let id=r.params["disk_id"].as_str().ok_or_else(||anyhow::anyhow!("disk_id required"))?;Ok(serde_json::to_value(c.hardware.GetDiskHealth(id).await?)?)}}).await;
         let c=self.clone();self.register_rpc_method("GetSystemHardware",move|_|{let c=c.clone();async move{Ok(serde_json::to_value(c.hardware.GetSystemHardware().await?)?)}}).await;
         let c=self.clone();self.register_rpc_method("ScanWifiNetworks",move|_|{let c=c.clone();async move{Ok(serde_json::to_value(c.hardware.ScanWifiNetworks().await?)?)}}).await;
