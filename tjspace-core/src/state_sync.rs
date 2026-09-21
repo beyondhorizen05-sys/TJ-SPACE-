@@ -423,31 +423,41 @@ pub async fn websocket_handler(
     Query(query): Query<SyncQuery>,
 ) -> Response {
     let bridge = Arc::new(core.sync.clone());
-    let result = bridge.OpenSyncSession(&query.client_id, &query.auth_token);
-    match result {
-        Ok((session_id, _)) => {
+    let prepared = if let Some(last_ack) = query.last_ack_seq {
+        bridge.HandleReconnect(&query.client_id, last_ack, &query.auth_token)
+            .map(|r| (r.session_id, r.replay, r.snapshot))
+    } else {
+        bridge.OpenSyncSession(&query.client_id, &query.auth_token)
+            .map(|(id, _)| (id, Vec::new(), None))
+    };
+    match prepared {
+        Ok((session_id, replay, snapshot)) => {
             let bridge2 = bridge.clone();
             let prefix = query.prefix.clone();
-            let last_ack = query.last_ack_seq;
             ws.on_upgrade(move |socket| async move {
-                handle_websocket(socket, bridge2, session_id, prefix, last_ack).await;
+                handle_websocket(socket, bridge2, session_id, prefix, replay, snapshot).await;
             })
         }
         Err(e) => (axum::http::StatusCode::UNAUTHORIZED, Json(json!({"error":e.to_string()}))).into_response(),
     }
 }
 
-async fn handle_websocket(mut socket: WebSocket, bridge: Arc<SyncBridge>, session_id: String, prefix: Option<String>, last_ack: Option<u64>) {
+async fn handle_websocket(mut socket: WebSocket, bridge: Arc<SyncBridge>, session_id: String, prefix: Option<String>, replay: Vec<SequencedDiff>, snapshot: Option<Snapshot>) {
     let filter = SyncFilter { prefix };
     let mut rx = match bridge.StreamDiffs(&session_id, filter) {
         Ok(r) => r,
         Err(_) => return,
     };
-    if let Some(seq) = last_ack {
-        let _ = bridge.Ack(&session_id, seq);
-    }
     let hello = json!({"protocol":SYNC_PROTOCOL,"session_id":session_id,"type":"opened"}).to_string();
     if socket.send(Message::Text(hello.into())).await.is_err() { let _=bridge.CloseSyncSession(&session_id); return; }
+    if let Some(snapshot)=snapshot {
+        if let Ok(payload)=serde_json::to_string(&SyncEnvelope{protocol:SYNC_PROTOCOL.into(),session_id:session_id.clone(),server_revision:snapshot.revision,batch:None,snapshot:Some(snapshot),resync_required:true,throttled:false}) {
+            if socket.send(Message::Text(payload.into())).await.is_err(){let _=bridge.CloseSyncSession(&session_id);return;}
+        }
+    }
+    if !replay.is_empty() {
+        let _=bridge.install_replay(&session_id,replay);
+    }
     loop {
         tokio::select! {
             inbound = socket.recv() => {
