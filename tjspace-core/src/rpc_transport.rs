@@ -6,7 +6,7 @@ use hmac::{Hmac, Mac};
 use rand_core::{OsRng, RngCore};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use sha2::Sha256;
 use std::{
     collections::{HashMap, HashSet},
@@ -21,7 +21,6 @@ use tokio::{
 };
 use uuid::Uuid;
 
-const PROTOCOL_VERSION: u32 = 1;
 const MAX_FRAME: usize = 4 * 1024 * 1024;
 const DEFAULT_IN_FLIGHT: usize = 32;
 const COOKIE_VERSION: u32 = 1;
@@ -369,7 +368,7 @@ impl RpcTransport {
             return Ok(claims.scopes);
         }
 
-        let signature = req.auth_sig.as_deref().ok_or_else(|| anyhow!("X-TJS-Auth-Sig required"))?;
+        let _signature = req.auth_sig.as_deref().ok_or_else(|| anyhow!("X-TJS-Auth-Sig required"))?;
         let public_key = self.load_device_public_key(device_id)?;
         self.ValidateAuthSignature(req, &public_key)?;
         Ok(Vec::new())
@@ -564,17 +563,29 @@ mod tests {
     use super::*;
     use ed25519_dalek::{Signer, SigningKey};
     use tempfile::tempdir;
+    use sqlx::postgres::PgPoolOptions;
     use tokio::io::duplex;
 
     fn test_transport() -> RpcTransport {
         let dir = tempdir().unwrap();
         let path = dir.path().join("auth.db");
-        let core = Arc::new(crate::Core::new_for_tests());
+        let patch_path = dir.path().join("state.db");
+        let core = Arc::new(crate::Core {
+            config: crate::Config {
+                database_url: "postgres://invalid/test".into(),
+                bind: "127.0.0.1:0".into(),
+                auth_token: String::new(),
+                runtime: crate::RuntimeConfig::default(),
+                node_id: "test-node".into(),
+                patch_db_path: patch_path.to_string_lossy().into_owned(),
+            },
+            db: PgPoolOptions::new().connect_lazy("postgres://invalid/test").unwrap(),
+            patch_db: crate::patch_db::PatchDb::open_database(patch_path.to_str().unwrap()).unwrap(),
+            handlers: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+        });
         let mut config = TransportConfig::default();
         config.auth_state_path = path.to_string_lossy().into_owned();
-        let transport = RpcTransport::new(core, config).unwrap();
-        std::mem::forget(dir);
-        transport
+        RpcTransport::new(core, config).unwrap()
     }
 
     #[tokio::test]
@@ -584,9 +595,9 @@ mod tests {
         transport.register_device_public_key("dev-1", &signing.verifying_key().to_bytes()).unwrap();
         let mut req = RpcEnvelope {
             jsonrpc: "2.0".into(),
-            id: Some(json!(1)),
+            id: Some(serde_json::json!(1)),
             method: "GetSystemState".into(),
-            params: json!({}),
+            params: serde_json::json!({}),
             device_id: Some("dev-1".into()),
             nonce: Some(Uuid::new_v4().to_string()),
             timestamp: Some(Utc::now().timestamp()),
@@ -613,7 +624,6 @@ mod tests {
     #[test]
     fn authorization_is_scope_aware_and_auditable() {
         let transport = test_transport();
-        transport.config.method_scopes.clone();
         let mut config = transport.config.clone();
         config.method_scopes.insert("Admin".into(), vec!["admin".into()]);
         let core = transport.core.clone();
@@ -653,7 +663,7 @@ mod tests {
         let mut input = Vec::new();
         input.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
         input.extend_from_slice(&bytes);
-        let (mut a, b) = duplex(1024);
+        let (mut a, b) = duplex(16 * 1024);
         tokio::spawn(async move {
             let mut writer = b;
             writer.write_all(&input).await.unwrap();
