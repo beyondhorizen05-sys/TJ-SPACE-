@@ -16,7 +16,7 @@ use std::{
 };
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
-    net::{TcpListener, UnixListener},
+    net::TcpListener,
     sync::{Mutex as AsyncMutex, Semaphore},
 };
 use uuid::Uuid;
@@ -187,11 +187,12 @@ impl RpcTransport {
         })
     }
 
+    #[cfg(unix)]
     pub async fn listen_on_unix_socket(&self, path: &str) -> Result<()> {
         if Path::new(path).exists() {
             std::fs::remove_file(path).with_context(|| format!("remove stale socket {path}"))?;
         }
-        let listener = UnixListener::bind(path)?;
+        let listener = tokio::net::UnixListener::bind(path)?;
         let this = self.clone();
         loop {
             let (stream, _) = listener.accept().await?;
@@ -202,6 +203,11 @@ impl RpcTransport {
                 }
             });
         }
+    }
+
+    #[cfg(not(unix))]
+    pub async fn listen_on_unix_socket(&self, _path: &str) -> Result<()> {
+        bail!("Unix sockets are not supported on this platform");
     }
 
     pub async fn listen_on_tcp(&self, addr: &str, port: u16) -> Result<()> {
