@@ -98,7 +98,9 @@ pub struct OsUpdateManager {
     http: reqwest::Client,
 }
 
-impl Default for OsUpdateConfig { fn default()->Self { Self { release_channel:"stable".into(), release_index_url:String::new(), state_root:PathBuf::from("tjspace-os-state"), public_key_hex:None, dry_run:false, command_timeout_seconds:120, max_boot_attempts:2, boot_selector_command:None, boot_health_command:None } } }\n\nimpl OsUpdateManager {
+impl Default for OsUpdateConfig { fn default()->Self { Self { release_channel:"stable".into(), release_index_url:String::new(), state_root:PathBuf::from("tjspace-os-state"), public_key_hex:None, dry_run:false, command_timeout_seconds:120, max_boot_attempts:2, boot_selector_command:None, boot_health_command:None } } }
+
+impl OsUpdateManager {
     pub fn new(patch_db: PatchDb, config: OsUpdateConfig) -> Self {
         Self { patch_db, config, http: reqwest::Client::new() }
     }
