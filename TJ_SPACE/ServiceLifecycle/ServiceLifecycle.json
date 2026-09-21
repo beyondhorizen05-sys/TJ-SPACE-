@@ -1,0 +1,1 @@
+{"version":"1.0.0","states":["Stopped","Starting","Running","Stopping","Error"],"forcedStop":{"leverHoldSeconds":3,"singleActionStops":false},"criticalTaskBarrier":{"color":"red","blocksMainDoor":true,"dropsWhenResolved":true},"surfaces":["physicalIgnition","controlledShutdown","sdkConsoles","actionFeedback","taskBeacons","healthMonitors","tickerLogs","configurationControlRoom"]}
