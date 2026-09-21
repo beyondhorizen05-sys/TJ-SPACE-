@@ -166,56 +166,115 @@ impl SyncBridge {
         let session_id_owned = session_id.to_string();
         tokio::spawn(async move {
             let mut source = patch_db.subscribe_to_diffs(filter.into());
-            while let Ok(diff) = source.recv().await {
-                let send = {
-                    let mut map = match sessions_ref.write() { Ok(m) => m, Err(_) => break };
-                    let s = match map.get_mut(&session_id_owned) { Some(s) => s, None => break };
-                    let seq = s.next_sequence;
-                    s.next_sequence = s.next_sequence.saturating_add(1);
-                    let hint = ApplyInterpolationHint(&diff);
-                    let item = SequencedDiff { sequence: seq, diff: diff.clone(), interpolation: hint };
-                    {
-                        let mut h = match history_ref.write() { Ok(v) => v, Err(_) => break };
-                        let q = h.entry(client_id.clone()).or_default();
-                        q.push_back(item.clone());
-                        while q.len() > HISTORY_LIMIT { q.pop_front(); }
-                    }
-                    if let Ok(mut cursors) = next_client_sequence_ref.write() { cursors.insert(client_id.clone(), s.next_sequence); }
-                    let envelope = SyncEnvelope {
-                        protocol: SYNC_PROTOCOL.into(),
-                        session_id: session_id_owned.clone(),
-                        server_revision: diff.revision,
-                        batch: Some(DiffBatch {
-                            first_sequence: seq,
-                            last_sequence: seq,
-                            diffs: vec![item],
-                            max_latency_ms: DEFAULT_BATCH_LATENCY_MS,
-                        }),
-                        snapshot: None,
-                        resync_required: false,
-                        throttled: false,
-                    };
-                    match s.tx.try_send(envelope) {
-                        Ok(()) => s.throttled = false,
-                        Err(_) => {
-                            s.throttled = true;
-                            if s.last_throttle_notice.elapsed() >= Duration::from_secs(1) {
-                                s.last_throttle_notice = Instant::now();
-                                let notice = SyncEnvelope {
+            loop {
+                let first = match source.recv().await {
+                    Ok(d) => d,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                        if let Ok(map) = sessions_ref.write() {
+                            if let Some(s) = map.get(&session_id_owned) {
+                                let _ = s.tx.try_send(SyncEnvelope {
                                     protocol: SYNC_PROTOCOL.into(),
                                     session_id: session_id_owned.clone(),
-                                    server_revision: diff.revision,
+                                    server_revision: patch_db.get_revision().unwrap_or(0),
                                     batch: None,
                                     snapshot: None,
                                     resync_required: true,
                                     throttled: true,
-                                };
-                                let _ = s.tx.try_send(notice);
+                                });
+                            }
+                        }
+                        tracing::warn!(trace_id=%session_id_owned,service_id=%client_id,skipped,"sync_source_lagged");
+                        continue;
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                };
+                let mut collected = vec![first];
+                let deadline = tokio::time::sleep(Duration::from_millis(DEFAULT_BATCH_LATENCY_MS));
+                tokio::pin!(deadline);
+                while collected.len() < 128 {
+                    tokio::select! {
+                        _ = &mut deadline => break,
+                        next = source.recv() => {
+                            match next {
+                                Ok(d) => collected.push(d),
+                                Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                                    if let Ok(map) = sessions_ref.write() {
+                                        if let Some(s) = map.get(&session_id_owned) {
+                                            let _ = s.tx.try_send(SyncEnvelope {
+                                                protocol: SYNC_PROTOCOL.into(),
+                                                session_id: session_id_owned.clone(),
+                                                server_revision: patch_db.get_revision().unwrap_or(0),
+                                                batch: None,
+                                                snapshot: None,
+                                                resync_required: true,
+                                                throttled: true,
+                                            });
+                                        }
+                                    }
+                                    tracing::warn!(trace_id=%session_id_owned,service_id=%client_id,skipped,"sync_batch_lagged");
+                                    break;
+                                }
+                                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                             }
                         }
                     }
-                };
-                if send.is_err() { break; }
+                }
+
+                let mut items = Vec::with_capacity(collected.len());
+                let mut envelope_revision = 0;
+                let mut should_stop = false;
+                {
+                    let mut map = match sessions_ref.write() { Ok(m) => m, Err(_) => break };
+                    let s = match map.get_mut(&session_id_owned) { Some(s) => s, None => break };
+                    for diff in collected {
+                        let seq = s.next_sequence;
+                        s.next_sequence = s.next_sequence.saturating_add(1);
+                        envelope_revision = diff.revision;
+                        let item = SequencedDiff {
+                            sequence: seq,
+                            interpolation: ApplyInterpolationHint(&diff),
+                            diff: diff.clone(),
+                        };
+                        if let Ok(mut h) = history_ref.write() {
+                            let q = h.entry(client_id.clone()).or_default();
+                            q.push_back(item.clone());
+                            while q.len() > HISTORY_LIMIT { q.pop_front(); }
+                        }
+                        items.push(item);
+                    }
+                    if let Ok(mut cursors) = next_client_sequence_ref.write() {
+                        cursors.insert(client_id.clone(), s.next_sequence);
+                    }
+                    let batch = make_batch(items, DEFAULT_BATCH_LATENCY_MS);
+                    let envelope = SyncEnvelope {
+                        protocol: SYNC_PROTOCOL.into(),
+                        session_id: session_id_owned.clone(),
+                        server_revision: envelope_revision,
+                        batch: Some(batch),
+                        snapshot: None,
+                        resync_required: false,
+                        throttled: false,
+                    };
+                    if s.tx.try_send(envelope).is_err() {
+                        s.throttled = true;
+                        if s.last_throttle_notice.elapsed() >= Duration::from_secs(1) {
+                            s.last_throttle_notice = Instant::now();
+                            let _ = s.tx.try_send(SyncEnvelope {
+                                protocol: SYNC_PROTOCOL.into(),
+                                session_id: session_id_owned.clone(),
+                                server_revision: envelope_revision,
+                                batch: None,
+                                snapshot: None,
+                                resync_required: true,
+                                throttled: true,
+                            });
+                        }
+                    } else {
+                        s.throttled = false;
+                    }
+                    should_stop = s.tx.is_closed();
+                }
+                if should_stop { break; }
             }
         });
         Ok(rx)
