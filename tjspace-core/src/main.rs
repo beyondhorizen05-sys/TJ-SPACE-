@@ -67,7 +67,16 @@ async fn main()->anyhow::Result<()>{
         Command::InstallerConfirm{operation_id}=>{println!("{operation_id}");},
         Command::InstallerConfirmExecute{operation_id}=>{core.installer.confirm(&operation_id)?;println!("confirmed {operation_id}");},
         Command::InstallerVerify=>println!("{}",serde_json::to_string_pretty(&core.installer.verify_installation().await?)?),
-        Command::InstallerFirstBoot=>{core.installer.first_boot_wizard().await?;},\n        Command::OsCheck=>println!("{}",serde_json::to_string_pretty(&core.os_updates.CheckForOsUpdate().await?)?),\n        Command::OsDownload{release_id}=>println!("{}",core.os_updates.DownloadOsUpdate(&release_id).await?.display()),\n        Command::OsVerify{release_id}=>println!("{}",core.os_updates.VerifyOsUpdate(&release_id).await?),\n        Command::OsApply{release_id}=>println!("{}",serde_json::to_string_pretty(&core.os_updates.ApplyOsUpdate(&release_id).await?)?),\n        Command::OsSafeMode=>core.os_updates.EnterSafeMode()?,\n        Command::OsExitSafeMode=>core.os_updates.ExitSafeMode()?,\n        Command::OsFactoryReset{preserve_data}=>println!("{}",serde_json::to_string_pretty(&core.os_updates.FactoryReset(preserve_data)?)?),\n        Command::OsRollback{target_version}=>core.os_updates.RollbackOs(&target_version)?,\n        Command::OsHistory=>println!("{}",serde_json::to_string_pretty(&core.os_updates.GetUpdateHistory()?)?),
+        Command::InstallerFirstBoot=>{core.installer.first_boot_wizard().await?;},
+        Command::OsCheck=>println!("{}",serde_json::to_string_pretty(&core.os_updates.CheckForOsUpdate().await?)?),
+        Command::OsDownload{release_id}=>println!("{}",core.os_updates.DownloadOsUpdate(&release_id).await?.display()),
+        Command::OsVerify{release_id}=>println!("{}",core.os_updates.VerifyOsUpdate(&release_id).await?),
+        Command::OsApply{release_id}=>println!("{}",serde_json::to_string_pretty(&core.os_updates.ApplyOsUpdate(&release_id).await?)?),
+        Command::OsSafeMode=>core.os_updates.EnterSafeMode()?,
+        Command::OsExitSafeMode=>core.os_updates.ExitSafeMode()?,
+        Command::OsFactoryReset{preserve_data}=>println!("{}",serde_json::to_string_pretty(&core.os_updates.FactoryReset(preserve_data)?)?),
+        Command::OsRollback{target_version}=>core.os_updates.RollbackOs(&target_version)?,
+        Command::OsHistory=>println!("{}",serde_json::to_string_pretty(&core.os_updates.GetUpdateHistory()?)?),
         Command::PackagePartial{s9pk_path,start,end}=>{let b=s9pk_toolchain::ExtractPartial(&s9pk_path,start..end)?;std::io::Write::write_all(&mut std::io::stdout(),&b)?;},
     }
     Ok(())
