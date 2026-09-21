@@ -150,7 +150,7 @@ impl FederationManager {
         let peer_x = decode32(&exchange.peer_x25519_public_key_hex)?;
         let challenge = hex::decode(&exchange.challenge_hex)?;
         if challenge.len() < 16 || challenge.len() > 64 { return Err(anyhow!("challenge must be 16..64 bytes")); }
-        let transcript = trust_transcript(self.node_id(), peer_id, &self.public_ed(), &hex::encode(self.public_x()), &peer_x, &exchange.endpoint, &challenge);
+        let transcript = trust_transcript(self.node_id(), peer_id, &self.public_ed(), &hex::encode(self.public_x()), &hex::encode(peer_ed), &hex::encode(peer_x), &exchange.endpoint, &challenge);
         VerifyingKey::from_bytes(&peer_ed)?.verify(&transcript, &Signature::from_slice(&hex::decode(exchange.peer_signature_hex)?)?)?;
         let local_sig = self.identity.signing.sign(&transcript);
         let peer = Peer { peer_id: peer_id.into(), endpoint: exchange.endpoint.clone(), discovered: false, trusted: true, ed25519_public_key_hex: Some(hex::encode(peer_ed)), x25519_public_key_hex: Some(hex::encode(peer_x)), last_seen_unix: now(), registry_scopes: vec![] };
@@ -358,11 +358,14 @@ impl FederationManager {
     }
 }
 
-fn trust_transcript(local_id:&str, peer_id:&str, local_ed:&str, local_x:&str, peer_x:&[u8;32], endpoint:&str, challenge:&[u8])->Vec<u8>{
-    format!("{}|trust|{}|{}|{}|{}|{}|{}",PROTOCOL,local_id,peer_id,local_ed,local_x,hex::encode(peer_x),endpoint,hex::encode(challenge)).into_bytes()
+fn trust_transcript(local_id:&str, peer_id:&str, local_ed:&str, local_x:&str, peer_ed:&str, peer_x:&str, endpoint:&str, challenge:&[u8])->Vec<u8>{
+    let mut ids=[local_id,peer_id]; ids.sort();
+    let mut keys=[local_ed,peer_ed]; keys.sort();
+    let mut xkeys=[local_x,peer_x]; xkeys.sort();
+    format!("{}|trust|{}|{}|{}|{}|{}|{}",PROTOCOL,ids[0],ids[1],keys[0],xkeys[0],xkeys[1],endpoint,hex::encode(challenge)).into_bytes()
 }
 fn key_for(shared:&[u8;32], a:&str, b:&str)->[u8;32]{
-    let mut h=Sha256::new();h.update(PROTOCOL.as_bytes());h.update(shared);h.update(a.as_bytes());h.update(b.as_bytes());h.finalize().into()
+    let mut h=Sha256::new();h.update(PROTOCOL.as_bytes());h.update(shared);let mut ids=[a,b];ids.sort();h.update(ids[0].as_bytes());h.update(ids[1].as_bytes());h.finalize().into()
 }
 fn now()->u64{SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()}
 fn decode32(s:&str)->Result<[u8;32]>{let b=hex::decode(s)?;b.try_into().map_err(|_|anyhow!("expected 32 bytes"))}
