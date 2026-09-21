@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"tjspace://system31/degradation","type":"object","required":["version","system","modes","principles","recovery","integration"],"properties":{"version":{"const":"1.0.0"},"system":{"const":31},"modes":{"type":"object"},"principles":{"type":"array"},"recovery":{"type":"object"},"integration":{"type":"object"}}}
