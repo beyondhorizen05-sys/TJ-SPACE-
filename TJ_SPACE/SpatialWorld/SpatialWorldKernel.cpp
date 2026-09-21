@@ -204,6 +204,60 @@ bool UTJSpatialWorldKernel::CaptureWorldLayout(FTJSpatialWorldLayout& OutLayout)
     return true;
 }
 
+bool UTJSpatialWorldKernel::RestoreWorldLayout(const FTJSpatialWorldLayout& Layout)
+{
+    if (!bBooted || Layout.WorldId.IsEmpty() || Layout.WorldId != ServerConfig.WorldId ||
+        !Layout.StreamingOrigin.IsFinite())
+    {
+        return false;
+    }
+
+    StreamingOrigin = Layout.StreamingOrigin;
+
+    for (const FTJSpatialDistrictState& District : Layout.Districts)
+    {
+        if (District.Id.IsEmpty() || !District.Center.IsFinite())
+        {
+            return false;
+        }
+    }
+
+    for (const FTJSpatialEntityState& State : Layout.Entities)
+    {
+        if (State.BackendId.IsEmpty() || !State.Transform.IsValid())
+        {
+            return false;
+        }
+
+        if (AActor* Actor = ResolveBackendId(State.BackendId))
+        {
+            Actor->SetActorTransform(State.Transform, false, nullptr, ETeleportType::TeleportPhysics);
+        }
+    }
+
+    Districts.Reset();
+    for (const FTJSpatialDistrictState& District : Layout.Districts)
+    {
+        Districts.Add(District.Coord, District);
+    }
+
+    const FTJSpatialDistrictCoord OriginDistrict = WorldToDistrict(StreamingOrigin);
+    if (!Districts.Contains(OriginDistrict))
+    {
+        FTJSpatialDistrictState OriginState;
+        OriginState.Id = MakeDistrictId(OriginDistrict);
+        OriginState.Coord = OriginDistrict;
+        OriginState.Center = FVector(
+            OriginDistrict.X * ServerConfig.DistrictCellSize + ServerConfig.DistrictCellSize * 0.5,
+            OriginDistrict.Y * ServerConfig.DistrictCellSize + ServerConfig.DistrictCellSize * 0.5,
+            0.0);
+        OriginState.bLoaded = true;
+        Districts.Add(OriginDistrict, OriginState);
+    }
+
+    return true;
+}
+
 bool UTJSpatialWorldKernel::PersistWorldLayout(const FTJSpatialWorldLayout& Layout)
 {
     if (!bBooted || Layout.WorldId.IsEmpty())
