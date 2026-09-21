@@ -2,7 +2,7 @@ pub mod backup;
 pub mod bins;
 pub mod db;
 pub mod install;
-pub mod hardware;
+pub mod hardware;\npub mod headless_api;
 pub mod lxc;
 pub mod net;
 pub mod os_install;
@@ -40,7 +40,7 @@ pub struct Config {
     #[serde(default)] pub hardware: hardware::HardwareConfig,
     #[serde(default)] pub node_id: String,
     #[serde(default = "default_patch_db")] pub patch_db_path: String,
-    #[serde(default)] pub os_updates: os_updates::OsUpdateConfig,
+    #[serde(default)] pub os_updates: os_updates::OsUpdateConfig,\n    #[serde(default)] pub jwt_secret: String,
 }
 fn default_bind()->String{"127.0.0.1:8090".into()}
 fn default_patch_db()->String{"tjspace-state.db".into()}
@@ -106,7 +106,7 @@ impl Core {
         let os_updates=os_updates::OsUpdateManager::new(patch_db.clone(), config.os_updates.clone());
         let _=os_updates.RecoverFailedBoot();
         let core=Arc::new(Self{config,db,patch_db:patch_db.clone(),hardware:hardware::HardwareManager::new(patch_db.clone(),hardware_config),installer,os_updates,handlers:Arc::new(RwLock::new(HashMap::new()))});
-        core.register_builtin_methods().await;
+        core.register_builtin_methods().await;\n        headless_api::register_rpc(&core).await;
         tracing::info!(trace_id=%Uuid::new_v4(),service_id="tjsd","core_initialized");
         Ok(core)
     }
