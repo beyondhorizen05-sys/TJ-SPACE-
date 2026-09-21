@@ -98,13 +98,13 @@ pub struct ThermalReading {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DriverInfo {
     pub module: String,
     pub loaded: bool,
     pub description: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GpuInfo {
     pub name: String,
     pub driver: Option<String>,
@@ -642,7 +642,7 @@ async fn block_size(device:&str)->Result<u64>{
 }
 async fn grow_fs(fs_type:&str,device:&str)->Result<()>{
     match fs_type {
-        "ext4"|"xfs"|"btrfs"=>{let cmd=match fs_type{"xfs"=>"xfs_growfs", "btrfs"=>"btrfs", _=>"resize2fs"}; let args=if fs_type=="btrfs"{vec![device,"resize","max",device]}else{vec![device]}; run_checked(cmd,&args,60).await.map(|_|())}
+        "ext4"|"xfs"|"btrfs"=>{let cmd=match fs_type{"xfs"=>"xfs_growfs", "btrfs"=>"btrfs", _=>"resize2fs"}; let args=if fs_type=="btrfs"{vec![device,"resize","max"]}else{vec![device]}; run_checked(cmd,&args,60).await.map(|_|())}
         _=>Ok(())
     }
 }
