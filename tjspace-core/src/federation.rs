@@ -127,10 +127,10 @@ impl FederationManager {
             let _=socket.join_multicast_v4(&Ipv4Addr::new(224,0,0,251),&Ipv4Addr::UNSPECIFIED);
             let mut buf=[0u8;9000];
             loop {
-                let (n,src)=match socket.recv_from(&mut buf){Ok(v)=>v,Err(e)=>{tracing::warn!(trace_id=%Uuid::new_v4(),service_id="tjsd",error=%e,"mdns_responder_receive_failed");continue;}};
+                let (n,_src)=match socket.recv_from(&mut buf){Ok(v)=>v,Err(e)=>{tracing::warn!(trace_id=%Uuid::new_v4(),service_id="tjsd",error=%e,"mdns_responder_receive_failed");continue;}};
                 if !buf[..n].windows(SERVICE.len()).any(|w| w==SERVICE.as_bytes()) {continue;}
                 let response=mdns_response(&node_id,port);
-                let _=socket.send_to(&response,src);
+                let _=socket.send_to(&response,MDNS_ADDR);
             }
         });
     }
