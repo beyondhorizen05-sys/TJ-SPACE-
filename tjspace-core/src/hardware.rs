@@ -134,6 +134,7 @@ pub struct Confirmation {
     pub operation: String,
     pub issued_at: String,
     pub expires_at: String,
+    pub confirmed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -188,6 +189,7 @@ impl HardwareManager {
             operation: format!("{operation}:{resource}"),
             issued_at: now.to_rfc3339(),
             expires_at: expires.to_rfc3339(),
+            confirmed: false,
         };
         self.confirmations.lock().map_err(|_| anyhow!("confirmation lock poisoned"))?
             .insert(operation_id.clone(), c.clone());
@@ -197,13 +199,14 @@ impl HardwareManager {
 
     pub fn confirm_destructive_operation(&self, operation_id: &str) -> Result<()> {
         let mut guard = self.confirmations.lock().map_err(|_| anyhow!("confirmation lock poisoned"))?;
-        let c = guard.get(operation_id).ok_or_else(|| anyhow!("confirmation not found or already consumed"))?;
+        let c = guard.get_mut(operation_id).ok_or_else(|| anyhow!("confirmation not found or already confirmed"))?;
         if c.expires_at < Utc::now().to_rfc3339() {
             guard.remove(operation_id);
             return Err(anyhow!("confirmation expired"));
         }
+        if c.confirmed { return Err(anyhow!("confirmation already confirmed")); }
+        c.confirmed = true;
         let resource = c.operation.clone();
-        guard.remove(operation_id);
         self.audit("confirmation-consumed", &resource, true, true, true, operation_id)?;
         Ok(())
     }
@@ -211,10 +214,11 @@ impl HardwareManager {
     fn require_confirmation(&self, operation_id: Option<&str>, operation: &str) -> Result<()> {
         let id = operation_id.ok_or_else(|| anyhow!("explicit confirmation required for {operation}"))?;
         let mut guard = self.confirmations.lock().map_err(|_| anyhow!("confirmation lock poisoned"))?;
-        let c = guard.remove(id).ok_or_else(|| anyhow!("invalid or already consumed confirmation"))?;
-        if c.expires_at < Utc::now().to_rfc3339() || !c.operation.starts_with(operation) {
-            return Err(anyhow!("confirmation invalid, expired, or bound to another operation"));
+        let c = guard.get(id).ok_or_else(|| anyhow!("invalid or already consumed confirmation"))?;
+        if c.expires_at < Utc::now().to_rfc3339() || !c.confirmed || !c.operation.starts_with(operation) {
+            return Err(anyhow!("confirmation invalid, expired, unconfirmed, or bound to another operation"));
         }
+        guard.remove(id);
         Ok(())
     }
 
