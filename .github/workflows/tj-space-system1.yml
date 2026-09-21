@@ -1,0 +1,15 @@
+name: TJ SPACE System 1 compliance
+on:
+  push:
+    paths: ["TJ_SPACE/**"]
+  pull_request:
+    paths: ["TJ_SPACE/**"]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r TJ_SPACE/CI/requirements.txt
+      - run: python -m pytest -q TJ_SPACE/CI/test_asset_validator.py
