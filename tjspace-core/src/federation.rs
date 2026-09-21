@@ -77,6 +77,7 @@ pub struct FederationManager {
     config: FederationConfig,
     identity: Arc<Identity>,
     peers: Arc<RwLock<HashMap<String, Peer>>>,
+    seen_requests: Arc<RwLock<HashMap<String, u64>>>,
 }
 
 struct Identity {
@@ -112,7 +113,7 @@ impl FederationManager {
     pub fn new(config: FederationConfig) -> Result<Self> {
         let identity = load_or_create_identity(Path::new(&config.state_path))?;
         let peers = load_peers(&PathBuf::from(format!("{}.peers.json", config.state_path)))?;
-        Ok(Self { config, identity: Arc::new(identity), peers: Arc::new(RwLock::new(peers)) })
+        Ok(Self { config, identity: Arc::new(identity), peers: Arc::new(RwLock::new(peers)), seen_requests: Arc::new(RwLock::new(HashMap::new())) })
     }
 
     pub fn node_id(&self) -> &str { &self.identity.node_id }
@@ -172,6 +173,17 @@ impl FederationManager {
         p.registry_scopes.clear();
         p.last_seen_unix = now();
         self.persist_peers(&store)
+    }
+
+    fn accept_request_id(&self, sender:&str, request_id:&str) -> Result<()> {
+        if request_id.is_empty() || request_id.len() > 128 { return Err(anyhow!("invalid federation request id")); }
+        let key=format!("{}:{}",sender,request_id);
+        let now=now();
+        let mut seen=self.seen_requests.write().map_err(|_| anyhow!("replay cache poisoned"))?;
+        seen.retain(|_,ts| now.saturating_sub(*ts) <= 600);
+        if seen.contains_key(&key) { return Err(anyhow!("replayed federation request")); }
+        seen.insert(key,now);
+        Ok(())
     }
 
     pub fn ListPeers(&self) -> Result<Vec<Peer>> {
@@ -281,6 +293,7 @@ pub async fn handle_envelope(core: Arc<crate::Core>, manager: Arc<FederationMana
     if body.len() > MAX_ENVELOPE { return Err(anyhow!("federation payload too large")); }
     let envelope: Envelope = serde_json::from_slice(&body)?;
     if envelope.protocol != PROTOCOL { return Err(anyhow!("unsupported federation protocol")); }
+    manager.accept_request_id(&envelope.sender_id, &envelope.request_id)?;
     let peer = {
         let store = manager.peers.read().map_err(|_| anyhow!("peer store poisoned"))?;
         let p = store.get(&envelope.sender_id).ok_or_else(|| anyhow!("unknown peer"))?;
@@ -288,6 +301,7 @@ pub async fn handle_envelope(core: Arc<crate::Core>, manager: Arc<FederationMana
         p.clone()
     };
     let request: PeerRequest = manager.decrypt_request(&peer, &envelope)?;
+    tracing::info!(trace_id=%envelope.request_id, service_id=%envelope.sender_id, "federation_peer_request");
     let response = match request.operation.as_str() {
         "status" => PeerResponse { ok:true, result:Some(serde_json::to_value(core.get_system_state().await?)?), error:None },
         "backup.replicate" => {
