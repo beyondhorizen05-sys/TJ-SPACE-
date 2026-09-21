@@ -32,7 +32,7 @@ pub struct OsUpdateConfig {
     pub max_boot_attempts: u32,
 }
 fn default_channel() -> String { "stable".into() }
-fn default_state_root() -> PathBuf { PathBuf::from("/var/lib/tjspace/os") }
+fn default_state_root() -> PathBuf { PathBuf::from("tjspace-os-state") }
 fn default_timeout() -> u64 { 120 }
 fn default_boot_attempts() -> u32 { 2 }
 
