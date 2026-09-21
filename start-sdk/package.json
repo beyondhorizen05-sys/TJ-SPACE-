@@ -1,0 +1,9 @@
+{
+  "name":"@tjspace/start-sdk",
+  "version":"0.1.0",
+  "description":"TJ SPACE Start SDK",
+  "main":"dist/main.js",
+  "types":"dist/main.d.ts",
+  "exports":{".":"./dist/main.js"},
+  "scripts":{"build":"tsc -p tsconfig.json"}
+}
