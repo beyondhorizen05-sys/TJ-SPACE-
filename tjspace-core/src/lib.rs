@@ -31,8 +31,10 @@ pub struct Config {
     #[serde(default)] pub auth_token: String,
     #[serde(default)] pub runtime: RuntimeConfig,
     #[serde(default)] pub node_id: String,
+    #[serde(default = "default_patch_db")] pub patch_db_path: String,
 }
 fn default_bind()->String{"127.0.0.1:8090".into()}
+fn default_patch_db()->String{"tjspace-state.db".into()}
 
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct RuntimeConfig {
@@ -44,7 +46,6 @@ fn default_timeout()->u64{30}
 #[derive(Debug, Clone, Serialize)]
 pub struct SystemState {
     pub node_id:String,
-    #[serde(default="default_patch_db")] pub patch_db_path:String,
     pub version:String,
     pub initialized:bool,
     pub services:Vec<service::ServiceRecord>,pub state_revision:u64,
@@ -74,6 +75,7 @@ type RpcHandler = Arc<dyn Fn(RpcRequest)->BoxFuture<Result<Value>> + Send + Sync
 pub struct Core {
     pub config:Config,
     pub db:PgPool,
+    pub patch_db:patch_db::PatchDb,
     handlers:Arc<RwLock<HashMap<String,RpcHandler>>>,
 }
 
