@@ -11,6 +11,7 @@ pub mod os_install;
 pub mod os_installer;
 pub mod os_updates;
 pub mod patch_db;
+pub mod state_sync;
 pub mod rpc_transport;
 pub mod container_runtime;
 pub mod registry;
@@ -44,6 +45,7 @@ pub struct Config {
     #[serde(default = "default_patch_db")] pub patch_db_path: String,
     #[serde(default)] pub os_updates: os_updates::OsUpdateConfig,
     #[serde(default)] pub federation: federation::FederationConfig,
+    #[serde(default)] pub sync: state_sync::SyncConfig,
     #[serde(default)] pub jwt_secret: String,
 }
 fn default_bind()->String{"127.0.0.1:8090".into()}
@@ -92,6 +94,7 @@ pub struct Core {
     pub hardware: hardware::HardwareManager,
     pub installer: os_installer::OsInstaller,
     pub os_updates: os_updates::OsUpdateManager,
+    pub sync: state_sync::SyncBridge,
     handlers:Arc<RwLock<HashMap<String,RpcHandler>>>,
 }
 
@@ -109,8 +112,9 @@ impl Core {
         let installer=os_installer::OsInstaller::new(patch_db.clone(),os_installer::InstallerConfig{dry_run:config.runtime.dry_run,command_timeout_seconds:config.runtime.command_timeout_seconds,live_mode_required:true});
         let os_updates=os_updates::OsUpdateManager::new(patch_db.clone(), config.os_updates.clone());
         let federation=federation::FederationManager::new(config.federation.clone())?;
+        let sync=state_sync::SyncBridge::new(patch_db.clone(),config.sync.clone(),config.auth_token.clone());
         let _=os_updates.RecoverFailedBoot();
-        let core=Arc::new(Self{config,db,patch_db:patch_db.clone(),hardware:hardware::HardwareManager::new(patch_db.clone(),hardware_config),installer,os_updates,federation,handlers:Arc::new(RwLock::new(HashMap::new()))});
+        let core=Arc::new(Self{config,db,patch_db:patch_db.clone(),hardware:hardware::HardwareManager::new(patch_db.clone(),hardware_config),installer,os_updates,federation,sync,handlers:Arc::new(RwLock::new(HashMap::new()))});
         core.register_builtin_methods().await;
         headless_api::register_rpc(&core).await;
         tracing::info!(trace_id=%Uuid::new_v4(),service_id="tjsd","core_initialized");
@@ -194,6 +198,11 @@ impl Core {
         let c=self.clone();self.register_rpc_method("RequestHardwareConfirmation",move|r|{let c=c.clone();async move{let op=r.params["operation"].as_str().ok_or_else(||anyhow::anyhow!("operation required"))?;let resource=r.params["resource"].as_str().ok_or_else(||anyhow::anyhow!("resource required"))?;Ok(serde_json::to_value(c.hardware.request_confirmation(op,resource)?)?)}}).await;
         let c=self.clone();self.register_rpc_method("ConfirmHardwareOperation",move|r|{let c=c.clone();async move{let id=r.params["operation_id"].as_str().ok_or_else(||anyhow::anyhow!("operation_id required"))?;c.hardware.confirm_destructive_operation(id)?;Ok(json!({"confirmed":id}))}}).await;
 let c=self.clone();self.register_rpc_method("ApplyPatch",move|r|{let c=c.clone();async move{let p:patch_db::Patch=serde_json::from_value(r.params)?;Ok(serde_json::to_value(c.patch_db.apply_patch(p)?)?)}}).await;
+        let c=self.clone();self.register_rpc_method("OpenSyncSession",move|r|{let c=c.clone();async move{let client=r.params["client_id"].as_str().ok_or_else(||anyhow::anyhow!("client_id required"))?;let token=r.params["auth_token"].as_str().unwrap_or("");let (id,_)=c.sync.OpenSyncSession(client,token)?;Ok(json!({"session_id":id}))}}).await;
+        let c=self.clone();self.register_rpc_method("RequestFullSnapshot",move|r|{let c=c.clone();async move{let id=r.params["session_id"].as_str().ok_or_else(||anyhow::anyhow!("session_id required"))?;Ok(serde_json::to_value(c.sync.RequestFullSnapshot(id)?)?)}}).await;
+        let c=self.clone();self.register_rpc_method("CloseSyncSession",move|r|{let c=c.clone();async move{let id=r.params["session_id"].as_str().ok_or_else(||anyhow::anyhow!("session_id required"))?;c.sync.CloseSyncSession(id)?;Ok(json!({"closed":id}))}}).await;
+        let c=self.clone();self.register_rpc_method("DetectSyncGap",move|r|{let c=c.clone();async move{let client=r.params["client_seq"].as_u64().ok_or_else(||anyhow::anyhow!("client_seq required"))?;let server=r.params["server_seq"].as_u64().ok_or_else(||anyhow::anyhow!("server_seq required"))?;Ok(json!({"gap":c.sync.DetectGap(client,server)}))}}).await;
+        let c=self.clone();self.register_rpc_method("HandleSyncReconnect",move|r|{let c=c.clone();async move{let client=r.params["client_id"].as_str().ok_or_else(||anyhow::anyhow!("client_id required"))?;let ack=r.params["last_ack_seq"].as_u64().unwrap_or(0);let token=r.params["auth_token"].as_str().unwrap_or("");Ok(serde_json::to_value(c.sync.HandleReconnect(client,ack,token)?)?)}}).await;
         let c=self.clone();self.register_rpc_method("DiscoverPeers",move|_|{let c=c.clone();async move{Ok(serde_json::to_value(c.federation.DiscoverPeers()?)?)}}).await;
         let c=self.clone();self.register_rpc_method("AddManualPeer",move|r|{let c=c.clone();async move{let id=r.params["peer_id"].as_str().ok_or_else(||anyhow::anyhow!("peer_id required"))?;let endpoint=r.params["endpoint"].as_str().ok_or_else(||anyhow::anyhow!("endpoint required"))?;Ok(serde_json::to_value(c.federation.AddManualPeer(id,endpoint)?)?)}}).await;
         let c=self.clone();self.register_rpc_method("EstablishTrust",move|r|{let c=c.clone();async move{let id=r.params["peer_id"].as_str().ok_or_else(||anyhow::anyhow!("peer_id required"))?;let exchange:federation::TrustExchange=serde_json::from_value(r.params["mutual_key_exchange"].clone())?;Ok(serde_json::to_value(c.federation.EstablishTrust(id,exchange).await?)?)}}).await;
@@ -218,9 +227,20 @@ let c=self.clone();self.register_rpc_method("ApplyPatch",move|r|{let c=c.clone()
         self.federation.start_mdns_responder();
         let federation=self.federation.clone();
         let app=Router::new().route("/api/v1/health",get(health)).route("/api/v1/rpc",post(rpc_http)).route("/api/v1/federation/envelope",post(move |body: axum::body::Bytes| federation_envelope(self.clone(), federation.clone(), body)))
+            .route("/api/v1/sync/ws", axum::routing::get(state_sync::websocket_handler))
             .merge(headless_api::router(self.clone())).with_state(self.clone()).layer(tower_http::trace::TraceLayer::new_for_http().make_span_with(|request: &axum::http::Request<axum::body::Body>| { let trace_id=request.headers().get("x-trace-id").and_then(|v|v.to_str().ok()).unwrap_or("generated"); tracing::info_span!("http_request",trace_id=%trace_id,service_id="tjsd",method=%request.method(),uri=%request.uri()) }));
+        let grpc_listener=tokio::net::TcpListener::bind(&self.config.sync.grpc_bind).await?;
+        let grpc_service=state_sync::grpc::SyncGrpcService{bridge:Arc::new(self.sync.clone())};
+        tokio::spawn(async move {
+            let incoming=tokio_stream::wrappers::TcpListenerStream::new(grpc_listener);
+            if let Err(e)=tonic::transport::Server::builder()
+                .add_service(state_sync::grpc::state_sync_server::StateSyncServer::new(grpc_service))
+                .serve_with_incoming(incoming).await {
+                tracing::error!(trace_id=%Uuid::new_v4(),service_id="tjsd",error=%e,"sync_grpc_server_stopped");
+            }
+        });
         let listener=tokio::net::TcpListener::bind(&self.config.bind).await?;
-        tracing::info!(trace_id=%Uuid::new_v4(),service_id="tjsd",bind=%self.config.bind,"rpc_server_started");
+        tracing::info!(trace_id=%Uuid::new_v4(),service_id="tjsd",bind=%self.config.bind,grpc_bind=%self.config.sync.grpc_bind,"rpc_server_started");
         axum::serve(listener,app).await?;
         Ok(())
     }
