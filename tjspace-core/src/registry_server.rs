@@ -36,6 +36,7 @@ pub struct RegistryConfig {
 }
 fn default_bind()->String{"127.0.0.1:8180".into()}
 fn default_storage()->String{"tjspace-registry".into()}
+fn default_page_one()->usize{1}
 fn default_page_size()->usize{25}
 fn default_max_page_size()->usize{100}
 fn default_rate_capacity()->u64{120}
@@ -43,12 +44,12 @@ fn default_rate_refill()->f64{2.0}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CatalogFilter {
-    pub page: usize,
-    pub page_size: usize,
-    pub query: Option<String>,
-    pub category: Option<String>,
-    pub publisher: Option<String>,
-    pub tag: Option<String>,
+    #[serde(default = "default_page_one")] pub page: usize,
+    #[serde(default = "default_page_size")] pub page_size: usize,
+    #[serde(default)] pub query: Option<String>,
+    #[serde(default)] pub category: Option<String>,
+    #[serde(default)] pub publisher: Option<String>,
+    #[serde(default)] pub tag: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
