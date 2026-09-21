@@ -11,10 +11,9 @@ fn confirmation_is_issued_and_consumed() {
 }
 
 #[test]
-fn filesystem_validation_rejects_unknown_type() {
+async fn filesystem_validation_rejects_unknown_type() {
     let dir=tempdir().unwrap();
     let db=tjspace_core::patch_db::PatchDb::open_database(dir.path().join("state.db").to_str().unwrap()).unwrap();
     let mgr=HardwareManager::new(db, HardwareConfig { dry_run:true, ..Default::default() });
-    let result=futures_lite::future::block_on(mgr.CreateVolume("x",&["/dev/nope".into()],"none","ntfs"));
-    assert!(result.is_err());
+    let result=futures_lite::future::block_on(mgr.CreateVolume("x",&["/dev/nope".into()],"none","ntfs").await; assert!(result.is_err());
 }
