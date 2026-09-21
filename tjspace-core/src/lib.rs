@@ -2,7 +2,9 @@ pub mod backup;
 pub mod bins;
 pub mod db;
 pub mod install;
-pub mod hardware;\npub mod federation;\npub mod headless_api;
+pub mod hardware;
+pub mod federation;
+pub mod headless_api;
 pub mod lxc;
 pub mod net;
 pub mod os_install;
@@ -40,7 +42,9 @@ pub struct Config {
     #[serde(default)] pub hardware: hardware::HardwareConfig,
     #[serde(default)] pub node_id: String,
     #[serde(default = "default_patch_db")] pub patch_db_path: String,
-    #[serde(default)] pub os_updates: os_updates::OsUpdateConfig,\n    #[serde(default)] pub federation: federation::FederationConfig,\n    #[serde(default)] pub jwt_secret: String,
+    #[serde(default)] pub os_updates: os_updates::OsUpdateConfig,
+    #[serde(default)] pub federation: federation::FederationConfig,
+    #[serde(default)] pub jwt_secret: String,
 }
 fn default_bind()->String{"127.0.0.1:8090".into()}
 fn default_patch_db()->String{"tjspace-state.db".into()}
@@ -103,10 +107,12 @@ impl Core {
         db::migrate(&db).await?;let patch_db=patch_db::PatchDb::open_database(&config.patch_db_path)?;
         let hardware_config=config.hardware.clone();
         let installer=os_installer::OsInstaller::new(patch_db.clone(),os_installer::InstallerConfig{dry_run:config.runtime.dry_run,command_timeout_seconds:config.runtime.command_timeout_seconds,live_mode_required:true});
-        let os_updates=os_updates::OsUpdateManager::new(patch_db.clone(), config.os_updates.clone());\n        let federation=federation::FederationManager::new(config.federation.clone())?;
+        let os_updates=os_updates::OsUpdateManager::new(patch_db.clone(), config.os_updates.clone());
+        let federation=federation::FederationManager::new(config.federation.clone())?;
         let _=os_updates.RecoverFailedBoot();
         let core=Arc::new(Self{config,db,patch_db:patch_db.clone(),hardware:hardware::HardwareManager::new(patch_db.clone(),hardware_config),installer,os_updates,federation,handlers:Arc::new(RwLock::new(HashMap::new()))});
-        core.register_builtin_methods().await;\n        headless_api::register_rpc(&core).await;
+        core.register_builtin_methods().await;
+        headless_api::register_rpc(&core).await;
         tracing::info!(trace_id=%Uuid::new_v4(),service_id="tjsd","core_initialized");
         Ok(core)
     }
@@ -209,7 +215,8 @@ let c=self.clone();self.register_rpc_method("ApplyPatch",move|r|{let c=c.clone()
     }
 
     pub async fn serve(self:Arc<Self>)->Result<()>{
-        let federation=self.federation.clone();\n        let app=Router::new().route("/api/v1/health",get(health)).route("/api/v1/rpc",post(rpc_http)).route("/api/v1/federation/envelope",post(move |body: axum::body::Bytes| federation_envelope(self.clone(), federation.clone(), body)))
+        let federation=self.federation.clone();
+        let app=Router::new().route("/api/v1/health",get(health)).route("/api/v1/rpc",post(rpc_http)).route("/api/v1/federation/envelope",post(move |body: axum::body::Bytes| federation_envelope(self.clone(), federation.clone(), body)))
             .merge(headless_api::router(self.clone())).with_state(self.clone()).layer(tower_http::trace::TraceLayer::new_for_http().make_span_with(|request: &axum::http::Request<axum::body::Body>| { let trace_id=request.headers().get("x-trace-id").and_then(|v|v.to_str().ok()).unwrap_or("generated"); tracing::info_span!("http_request",trace_id=%trace_id,service_id="tjsd",method=%request.method(),uri=%request.uri()) }));
         let listener=tokio::net::TcpListener::bind(&self.config.bind).await?;
         tracing::info!(trace_id=%Uuid::new_v4(),service_id="tjsd",bind=%self.config.bind,"rpc_server_started");
