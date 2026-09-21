@@ -152,7 +152,17 @@ pub async fn run_cli(cli:Cli)->i32{
         CliCommand::Update(c)=>update_call(&call,c).await,
         CliCommand::Diag(c)=>diag_call(&call,c).await,
     };
-    match result{Ok(v)=>{if !cli.quiet{if cli.json{println!("{}",serde_json::to_string(&v).unwrap())}else{println!("{}",serde_json::to_string_pretty(&v).unwrap())}}EXIT_OK},Err(e)=>{if !cli.quiet{eprintln!("{e}")}EXIT_REMOTE}}
+    match result{Ok(v)=>{if !cli.quiet{if cli.json{println!("{}",serde_json::to_string(&v).unwrap())}else{println!("{}",serde_json::to_string_pretty(&v).unwrap())}}EXIT_OK},Err(e)=>{let code=classify_error(&e);if !cli.quiet{eprintln!("{e}")}code}}
+}
+fn classify_error(e:&anyhow::Error)->i32{
+    let s=e.to_string().to_ascii_lowercase();
+    if s.contains("jwt")||s.contains("authentication")||s.contains("unauthorized") {EXIT_AUTH}
+    else if s.contains("not found") {EXIT_NOT_FOUND}
+    else if s.contains("permission")||s.contains("forbidden")||s.contains("confirmation") {EXIT_PERMISSION}
+    else if s.contains("conflict")||s.contains("already") {EXIT_CONFLICT}
+    else if s.contains("invalid")||s.contains("required") {EXIT_USAGE}
+    else if s.contains("io")||s.contains("connection")||s.contains("http") {EXIT_IO}
+    else {EXIT_REMOTE}
 }
 async fn service_call<F,Fut>(call:&F,c:ServiceCommand)->Result<Value>where F:Fn(String,Value)->Fut,Fut:std::future::Future<Output=Result<Value>>{match c{ServiceCommand::List=>call("ListServices".into(),json!({})).await,ServiceCommand::Start{package_id}=>call("StartService".into(),json!({"package_id":package_id})).await,ServiceCommand::Stop{package_id,force}=>call("StopService".into(),json!({"package_id":package_id,"graceful":!force})).await,ServiceCommand::Restart{package_id}=>call("RestartService".into(),json!({"package_id":package_id})).await,ServiceCommand::Logs{package_id,lines}=>call("ServiceLogs".into(),json!({"package_id":package_id,"lines":lines})).await,ServiceCommand::Config{package_id}=>call("ServiceConfig".into(),json!({"package_id":package_id})).await}}
 async fn package_call<F,Fut>(call:&F,c:PackageCommand)->Result<Value>where F:Fn(String,Value)->Fut,Fut:std::future::Future<Output=Result<Value>>{match c{PackageCommand::Install{path}=>call("InstallPackage".into(),json!({"s9pk_path":path})).await,PackageCommand::Uninstall{package_id,purge_data}=>call("UninstallPackage".into(),json!({"package_id":package_id,"purge_data":purge_data})).await,PackageCommand::List=>call("ListPackages".into(),json!({})).await,PackageCommand::Inspect{package_id}=>call("InspectPackage".into(),json!({"package_id":package_id})).await,PackageCommand::Verify{package_id,public_key_hex}=>call("VerifyPackage".into(),json!({"package_id":package_id,"public_key_hex":public_key_hex})).await}}
