@@ -580,6 +580,8 @@ impl HardwareManager {
         })
     }
 
+    pub fn get_state_snapshot(&self) -> Result<crate::patch_db::Snapshot> { self.patch_db.get_snapshot() }
+
     fn patch_volume(&self, volume: &Volume) -> Result<()> {
         self.patch_db.apply_patch(Patch { version: crate::patch_db::PATCH_VERSION, path: format!("hardware.volumes.{}", volume.id), op: PatchOp::Set, value: Some(serde_json::to_value(volume)?), actor: "tjsd".into(), authorization: "allow".into() })?;
         Ok(())
