@@ -188,6 +188,9 @@ public:
     UFUNCTION(BlueprintCallable, Category="TJ SPACE|Persistence")
     bool PersistWorldLayout(const FTJSpatialWorldLayout& Layout);
 
+    UFUNCTION(BlueprintCallable, Category="TJ SPACE|Persistence")
+    bool RestoreWorldLayout(const FTJSpatialWorldLayout& Layout);
+
     UFUNCTION(BlueprintPure, Category="TJ SPACE|Persistence")
     bool CaptureWorldLayout(FTJSpatialWorldLayout& OutLayout) const;
 
