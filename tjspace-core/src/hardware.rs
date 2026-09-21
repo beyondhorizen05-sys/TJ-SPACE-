@@ -98,6 +98,13 @@ pub struct ThermalReading {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DriverInfo {
+    pub module: String,
+    pub loaded: bool,
+    pub description: Option<String>,
+}
+
 pub struct GpuInfo {
     pub name: String,
     pub driver: Option<String>,
@@ -110,6 +117,7 @@ pub struct SystemHardware {
     pub ram_available_bytes: u64,
     pub gpus: Vec<GpuInfo>,
     pub thermals: Vec<ThermalReading>,
+    pub drivers: Vec<DriverInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -346,7 +354,6 @@ impl HardwareManager {
         let lv = format!("tjlv-{}", &id[4..12]);
         let md = if normalized != "none" && normalized != "lvm" { Some(format!("/dev/md/{lv}")) } else { None };
         if !self.config.dry_run {
-            for d in &resolved { run_checked("pvcreate", &["-ff", "-y", d], self.config.command_timeout_seconds).await?; }
             if let Some(level) = md.as_ref() {
                 let level_name = normalized.as_str();
                 let md_name = level.trim_start_matches("/dev/md/");
@@ -358,6 +365,7 @@ impl HardwareManager {
                 run_checked("pvcreate", &["-ff", "-y", level], self.config.command_timeout_seconds).await?;
                 run_checked("vgcreate", &[&vg, level], self.config.command_timeout_seconds).await?;
             } else {
+                for d in &resolved { run_checked("pvcreate", &["-ff", "-y", d], self.config.command_timeout_seconds).await?; }
                 let refs: Vec<&str> = resolved.iter().map(String::as_str).collect();
                 let mut args = vec![vg.as_str()];
                 args.extend(refs);
@@ -486,6 +494,46 @@ impl HardwareManager {
         Ok(())
     }
 
+    pub async fn GetDrivers(&self) -> Result<Vec<DriverInfo>> {
+        let mut drivers = Vec::new();
+        if let Ok(text) = fs::read_to_string("/proc/modules") {
+            for line in text.lines() {
+                if let Some(module) = line.split_whitespace().next() {
+                    drivers.push(DriverInfo { module: module.into(), loaded: true, description: None });
+                }
+            }
+        }
+        drivers.sort_by(|a,b| a.module.cmp(&b.module));
+        Ok(drivers)
+    }
+
+    pub async fn LoadDriver(&self, module: &str) -> Result<()> {
+        validate_module_name(module)?;
+        if !self.config.dry_run {
+            run_checked("modprobe", &[module], self.config.command_timeout_seconds).await?;
+        }
+        self.audit("load-driver", module, false, true, true, "modprobe")?;
+        Ok(())
+    }
+
+    pub async fn UnloadDriver(&self, module: &str) -> Result<()> {
+        self.unload_driver_confirmed(module, None).await
+    }
+
+    pub async fn UnloadDriverConfirmed(&self, module: &str, confirmation_id: &str) -> Result<()> {
+        self.unload_driver_confirmed(module, Some(confirmation_id)).await
+    }
+
+    async fn unload_driver_confirmed(&self, module: &str, confirmation_id: Option<&str>) -> Result<()> {
+        validate_module_name(module)?;
+        if !self.config.dry_run {
+            self.require_confirmation(confirmation_id, &format!("unload-driver:{module}"))?;
+            run_checked("modprobe", &["-r", module], self.config.command_timeout_seconds).await?;
+        }
+        self.audit("unload-driver", module, true, confirmation_id.is_some() || self.config.dry_run, true, "modprobe -r")?;
+        Ok(())
+    }
+
     pub async fn GetSystemHardware(&self) -> Result<SystemHardware> {
         let cpu_text = fs::read_to_string("/proc/cpuinfo").unwrap_or_default();
         let model = cpu_text.lines().find_map(|l| l.strip_prefix("model name\t: ")).unwrap_or("unknown").into();
@@ -524,6 +572,7 @@ impl HardwareManager {
         Ok(SystemHardware {
             cpu: CpuInfo { model, logical_cores: logical, physical_cores: None, frequency_mhz: frequency },
             ram_total_bytes: ram_total, ram_available_bytes: ram_avail, gpus, thermals,
+            drivers: self.GetDrivers().await?,
         })
     }
 
