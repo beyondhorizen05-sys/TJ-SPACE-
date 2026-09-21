@@ -1,0 +1,26 @@
+use anyhow::{anyhow,Result};
+use rusqlite::{params,Connection,OptionalExtension};
+use serde::{Deserialize,Serialize};
+use serde_json::{json,Value};
+use sha2::{Digest,Sha256};
+use std::{path::Path,sync::{Arc,Mutex}};
+use tokio::sync::broadcast;
+
+pub const PATCH_VERSION:u32=1;
+#[derive(Debug,Clone,Serialize,Deserialize,PartialEq)]pub struct Patch{pub version:u32,pub path:String,pub op:PatchOp,pub value:Option<Value>,pub actor:String,pub authorization:String}
+#[derive(Debug,Clone,Serialize,Deserialize,PartialEq)]#[serde(rename_all="lowercase")]pub enum PatchOp{Set,Delete}
+#[derive(Debug,Clone,Serialize,Deserialize,PartialEq)]pub struct TypedDiff{pub version:u32,pub revision:u64,pub patch:Patch,pub previous:Option<Value>,pub current:Option<Value>}
+#[derive(Debug,Clone,Serialize,Deserialize)]pub struct Snapshot{pub revision:u64,pub state:Value}
+#[derive(Debug,Clone,Default)]pub struct DiffFilter{pub prefix:Option<String>}
+#[derive(Clone)]pub struct PatchDb{inner:Arc<Mutex<Connection>>,tx:broadcast::Sender<TypedDiff>}
+impl PatchDb{
+ pub fn open_database(path:&str)->Result<Self>{if path!=":memory:"{if let Some(p)=Path::new(path).parent(){if !p.as_os_str().is_empty(){std::fs::create_dir_all(p)?;}}}let c=Connection::open(path)?;c.pragma_update(None,"journal_mode","WAL")?;c.pragma_update(None,"synchronous","FULL")?;c.pragma_update(None,"foreign_keys","ON")?;c.execute_batch("BEGIN;CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);CREATE TABLE IF NOT EXISTS state(path TEXT PRIMARY KEY,value TEXT NOT NULL);CREATE TABLE IF NOT EXISTS revisions(revision INTEGER PRIMARY KEY,diff TEXT NOT NULL,patch_hash TEXT NOT NULL);INSERT OR IGNORE INTO meta(key,value)VALUES('revision','0');COMMIT;")?;let(tx,_)=broadcast::channel(1024);Ok(Self{inner:Arc::new(Mutex::new(c)),tx})}
+ pub fn get_snapshot(&self)->Result<Snapshot>{let c=self.inner.lock().map_err(|_|anyhow!("store lock poisoned"))?;let rev:String=c.query_row("SELECT value FROM meta WHERE key='revision'",[],|r|r.get(0))?;let mut root=serde_json::Map::new();let mut q=c.prepare("SELECT path,value FROM state ORDER BY path")?;for row in q.query_map([],|r|Ok((r.get::<_,String>(0)?,r.get::<_,String>(1)?)))?{let(path,val)=row?;set_path(&mut root,path.split('.').collect(),serde_json::from_str(&val)?);}Ok(Snapshot{revision:rev.parse()?,state:Value::Object(root)})}
+ pub fn get_revision(&self)->Result<u64>{let c=self.inner.lock().map_err(|_|anyhow!("store lock poisoned"))?;Ok(c.query_row("SELECT value FROM meta WHERE key='revision'",[],|r|r.get::<_,String>(0))?.parse()?)}
+ pub fn validate_patch(&self,p:&Patch)->Result<()>{if p.version!=PATCH_VERSION{return Err(anyhow!("unsupported patch version"))}if p.path.is_empty()||p.path.starts_with('.')||p.path.contains(".."){return Err(anyhow!("invalid state path"))}if p.actor.is_empty(){return Err(anyhow!("actor required"))}if p.authorization!="allow"{return Err(anyhow!("patch authorization denied"))}if matches!(p.op,PatchOp::Set)&&p.value.is_none(){return Err(anyhow!("set requires value"))}Ok(())}
+ pub fn apply_patch(&self,p:Patch)->Result<TypedDiff>{self.validate_patch(&p)?;let mut c=self.inner.lock().map_err(|_|anyhow!("store lock poisoned"))?;let tx=c.transaction()?;let old:Option<String>=tx.query_row("SELECT value FROM state WHERE path=?1",params![p.path],|r|r.get(0)).optional()?;let prev=old.as_deref().map(serde_json::from_str).transpose()?;match p.op{PatchOp::Set=>{let s=serde_json::to_string(p.value.as_ref().unwrap())?;tx.execute("INSERT INTO state(path,value)VALUES(?1,?2)ON CONFLICT(path)DO UPDATE SET value=excluded.value",params![p.path,s])?},PatchOp::Delete=>{tx.execute("DELETE FROM state WHERE path=?1",params![p.path])?}}let rev:String=tx.query_row("SELECT value FROM meta WHERE key='revision'",[],|r|r.get(0))?;let next:i64=rev.parse()?+1;tx.execute("UPDATE meta SET value=?1 WHERE key='revision'",params![next.to_string()])?;let current=p.value.clone();let hash=hex(&Sha256::digest(serde_json::to_vec(&p)?));let diff=TypedDiff{version:PATCH_VERSION,revision:next as u64,patch:p,previous:prev,current};tx.execute("INSERT INTO revisions(revision,diff,patch_hash)VALUES(?1,?2,?3)",params![next,serde_json::to_string(&diff)?,hash])?;tx.commit()?;let _=self.tx.send(diff.clone());Ok(diff)}
+ pub fn subscribe_to_diffs(&self,filter:DiffFilter)->broadcast::Receiver<TypedDiff>{let mut rx=self.tx.subscribe();if filter.prefix.is_none(){return rx}let(tx2,rx2)=broadcast::channel(1024);let prefix=filter.prefix.unwrap();tokio::spawn(async move{while let Ok(d)=rx.recv().await{if d.patch.path.starts_with(&prefix){let _=tx2.send(d);}}});rx2}
+ pub fn reconcile(&self,from:u64)->Result<Vec<TypedDiff>>{let c=self.inner.lock().map_err(|_|anyhow!("store lock poisoned"))?;let mut q=c.prepare("SELECT diff FROM revisions WHERE revision>?1 ORDER BY revision")?;let mut out=Vec::new();for row in q.query_map(params![from as i64],|r|r.get::<_,String>(0))?{out.push(serde_json::from_str(&row?)?);}Ok(out)}
+}
+fn set_path(map:&mut serde_json::Map<String,Value>,parts:Vec<&str>,v:Value){if parts.is_empty(){return}if parts.len()==1{map.insert(parts[0].into(),v);return}let e=map.entry(parts[0].into()).or_insert_with(||json!({}));if let Value::Object(m)=e{set_path(m,parts[1..].to_vec(),v)}}
+fn hex(b:&[u8])->String{b.iter().map(|x|format!("{x:02x}")).collect()}
