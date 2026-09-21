@@ -7,6 +7,10 @@ edition = "2024"
 name = "tjs-box"
 path = "src/main.rs"
 
+[[bin]]
+name = "tjspace-cli"
+path = "src/cli.rs"
+
 [lib]
 name = "tjspace_core"
 path = "src/lib.rs"
