@@ -174,6 +174,36 @@ bool UTJSpatialWorldKernel::SetEnvironmentState(const FTJSystemHealthState& Syst
     return true;
 }
 
+bool UTJSpatialWorldKernel::CaptureWorldLayout(FTJSpatialWorldLayout& OutLayout) const
+{
+    if (!bBooted || !IsValid(World))
+    {
+        return false;
+    }
+
+    OutLayout = FTJSpatialWorldLayout();
+    OutLayout.WorldId = ServerConfig.WorldId;
+    OutLayout.StreamingOrigin = StreamingOrigin;
+
+    for (const auto& Pair : EntityStates)
+    {
+        FTJSpatialEntityState State = Pair.Value;
+        if (AActor* Actor = BackendToActor.FindRef(Pair.Key))
+        {
+            State.Transform = Actor->GetActorTransform();
+            State.DistrictId = MakeDistrictId(WorldToDistrict(State.Transform.GetLocation()));
+        }
+        OutLayout.Entities.Add(State);
+    }
+
+    for (const auto& Pair : Districts)
+    {
+        OutLayout.Districts.Add(Pair.Value);
+    }
+
+    return true;
+}
+
 bool UTJSpatialWorldKernel::PersistWorldLayout(const FTJSpatialWorldLayout& Layout)
 {
     if (!bBooted || Layout.WorldId.IsEmpty())
