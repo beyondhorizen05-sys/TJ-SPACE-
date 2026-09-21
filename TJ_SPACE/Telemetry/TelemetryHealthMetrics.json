@@ -1,0 +1,1 @@
+{"version":"1.0.0","facilities":{"cpu":"power plant","ram":"pressure vessels","disk":"storage silos","network":"network exchange","uptime":"uptime monument"},"graphReplacement":"world-only telemetry; no traditional graphs required","strainBinding":"DegradedStrained","alerts":"world events","containerComparison":"per-container comparative telemetry"}
