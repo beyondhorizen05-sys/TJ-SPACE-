@@ -1,0 +1,9 @@
+name: tj-space-system8-installer
+on: [push,pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --manifest-path tjspace-core/Cargo.toml --test os_installer
