@@ -1,0 +1,17 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"tjspace://system1/art-bible",
+  "title":"TJ SPACE Visual Art Bible",
+  "type":"object",
+  "additionalProperties":false,
+  "required":["version","engine","rendering","materials","ui","assetCompliance"],
+  "properties":{
+    "version":{"type":"string","const":"1.0.0"},
+    "engine":{"type":"object","required":["renderer","geometry","lighting","textures","toneMapping"],"properties":{
+      "renderer":{"const":"Unreal Engine 5"},"geometry":{"const":"Nanite"},"lighting":{"const":"Lumen"},"textures":{"enum":["4K","8K"]},"toneMapping":{"const":"ACES"}}},
+    "rendering":{"type":"object","required":["shading","antiAliasing"],"properties":{"shading":{"const":"PBR"},"antiAliasing":{"const":"TSR"}}},
+    "materials":{"type":"array","minItems":8,"items":{"type":"object","required":["name","degradedStrainedParameter"],"properties":{"name":{"type":"string"},"degradedStrainedParameter":{"const":"DegradedStrained"}}}},
+    "ui":{"type":"object","required":["primitives","style"],"properties":{"style":{"const":"photorealistic holographic"},"primitives":{"type":"array"}}},
+    "assetCompliance":{"type":"object","required":["blocking","requiredMaterialParameter"],"properties":{"blocking":{"const":true},"requiredMaterialParameter":{"const":"DegradedStrained"}}}
+  }
+}
