@@ -356,8 +356,12 @@ impl SyncBridge {
         let (session_id, _rx) = self.OpenSyncSession(client_id, auth_token)?;
         let history = self.history.read().map_err(|_| anyhow!("history lock poisoned"))?
             .get(client_id).cloned().unwrap_or_default();
+        let next_sequence = self.next_client_sequence.read().map_err(|_| anyhow!("sequence lock poisoned"))?
+            .get(client_id).copied().unwrap_or(1);
         let replay: Vec<SequencedDiff> = history.iter().filter(|d| d.sequence > last_ack_seq).cloned().collect();
-        let resync_required = !replay.is_empty() && replay.first().map(|d| d.sequence > last_ack_seq.saturating_add(1)).unwrap_or(false);
+        let expected = last_ack_seq.saturating_add(1);
+        let oldest = history.front().map(|d| d.sequence);
+        let resync_required = next_sequence > expected && oldest.map(|seq| seq > expected).unwrap_or(true);
         if resync_required {
             return Ok(ReconnectResult { session_id, replay: vec![], snapshot: Some(self.patch_db.get_snapshot()?), resync_required: true });
         }
