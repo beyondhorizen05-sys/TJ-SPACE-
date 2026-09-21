@@ -161,6 +161,7 @@ impl SyncBridge {
         let patch_db = self.patch_db.clone();
         let sessions_ref = self.sessions.clone();
         let history_ref = self.history.clone();
+        let next_client_sequence_ref = self.next_client_sequence.clone();
         let client_id = session.client_id.clone();
         let session_id_owned = session_id.to_string();
         tokio::spawn(async move {
@@ -171,7 +172,6 @@ impl SyncBridge {
                     let s = match map.get_mut(&session_id_owned) { Some(s) => s, None => break };
                     let seq = s.next_sequence;
                     s.next_sequence = s.next_sequence.saturating_add(1);
-                    if let Ok(mut next) = sessions_ref.read().map(|_| ()) { let _ = &mut next; }
                     let hint = ApplyInterpolationHint(&diff);
                     let item = SequencedDiff { sequence: seq, diff: diff.clone(), interpolation: hint };
                     {
@@ -180,7 +180,7 @@ impl SyncBridge {
                         q.push_back(item.clone());
                         while q.len() > HISTORY_LIMIT { q.pop_front(); }
                     }
-                    if let Ok(mut cursors) = history_ref.write() { let _ = cursors.get_mut(&client_id); }
+                    if let Ok(mut cursors) = next_client_sequence_ref.write() { cursors.insert(client_id.clone(), s.next_sequence); }
                     let envelope = SyncEnvelope {
                         protocol: SYNC_PROTOCOL.into(),
                         session_id: session_id_owned.clone(),
