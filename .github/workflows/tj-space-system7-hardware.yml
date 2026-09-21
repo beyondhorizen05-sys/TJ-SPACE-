@@ -1,0 +1,22 @@
+name: tj-space-system7-hardware
+on: [push,pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: tjs
+          POSTGRES_DB: tjspace
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U tjs -d tjspace"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --manifest-path tjspace-core/Cargo.toml
+        env:
+          DATABASE_URL: postgresql://tjs:postgres@127.0.0.1:5432/tjspace
