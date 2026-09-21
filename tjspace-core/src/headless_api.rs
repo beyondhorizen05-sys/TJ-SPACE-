@@ -73,7 +73,7 @@ fn flatten_json(prefix:&str,v:&Value)->Vec<(String,Value)>{let mut out=Vec::new(
 
 pub async fn serve_api(core:Arc<Core>)->Result<()>{
     let app=Router::new()
-      .route("/api/v1/status",get(api_get_status))
+      .route("/api/v1/status",get(api_get_status).post(api_get_status))
       .route("/api/v1/service/:action",post(api_dispatch))
       .route("/api/v1/package/:action",post(api_dispatch))
       .route("/api/v1/registry/:action",post(api_dispatch))
