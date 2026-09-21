@@ -2,6 +2,7 @@ pub mod backup;
 pub mod bins;
 pub mod db;
 pub mod install;
+pub mod hardware;
 pub mod lxc;
 pub mod net;
 pub mod os_install;
