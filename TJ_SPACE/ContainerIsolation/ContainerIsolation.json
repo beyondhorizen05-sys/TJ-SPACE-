@@ -1,0 +1,14 @@
+{
+ "version":"1.0.0",
+ "boundaryModes":["solid","xray","isolation","traffic"],
+ "healthStates":["unknown","healthy","degraded","critical","stopped"],
+ "trafficRule":"cross-container traffic must render as an explicit gated handshake; never a free-flowing pipe",
+ "manifest":{
+  "containerId":"example-container",
+  "packageId":"example.service",
+  "subcontainerIds":["worker-a","worker-b"],
+  "volumeMounts":[{"hostPath":"/srv/data","containerPath":"/app/data","readOnly":false}],
+  "limits":{"cpuLimit01":0.75,"memoryLimit01":0.60,"pidsLimit01":0.50,"ioLimit01":0.80},
+  "health":"healthy"
+ }
+}
