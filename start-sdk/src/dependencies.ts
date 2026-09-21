@@ -1,0 +1,1 @@
+export type Dependency = {id:string; version?:string; optional?:boolean};
