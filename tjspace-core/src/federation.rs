@@ -394,7 +394,7 @@ fn trust_transcript(local_id:&str, peer_id:&str, local_ed:&str, local_x:&str, pe
     let mut ids=[local_id,peer_id]; ids.sort();
     let mut keys=[local_ed,peer_ed]; keys.sort();
     let mut xkeys=[local_x,peer_x]; xkeys.sort();
-    format!("{}|trust|{}|{}|{}|{}|{}|{}",PROTOCOL,ids[0],ids[1],keys[0],xkeys[0],xkeys[1],endpoint,hex::encode(challenge)).into_bytes()
+    format!("{}|trust|{}|{}|{}|{}|{}|{}|{}",PROTOCOL,ids[0],ids[1],keys[0],keys[1],xkeys[0],xkeys[1],endpoint,hex::encode(challenge)).into_bytes()
 }
 fn key_for(shared:&[u8;32], a:&str, b:&str)->[u8;32]{
     let mut h=Sha256::new();h.update(PROTOCOL.as_bytes());h.update(shared);let mut ids=[a,b];ids.sort();h.update(ids[0].as_bytes());h.update(ids[1].as_bytes());h.finalize().into()
