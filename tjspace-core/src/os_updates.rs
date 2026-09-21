@@ -98,12 +98,12 @@ pub struct OsUpdateManager {
     http: reqwest::Client,
 }
 
-impl OsUpdateManager {
+impl Default for OsUpdateConfig { fn default()->Self { Self { release_channel:"stable".into(), release_index_url:String::new(), state_root:PathBuf::from("tjspace-os-state"), public_key_hex:None, dry_run:false, command_timeout_seconds:120, max_boot_attempts:2, boot_selector_command:None, boot_health_command:None } } }\n\nimpl OsUpdateManager {
     pub fn new(patch_db: PatchDb, config: OsUpdateConfig) -> Self {
         Self { patch_db, config, http: reqwest::Client::new() }
     }
 
-    pub async fn check_for_os_update(&self) -> Result<Option<OsRelease>> {
+    pub async fn CheckForOsUpdate(&self) -> Result<Option<OsRelease>> {
         if self.config.release_index_url.is_empty() {
             return Err(anyhow!("release_index_url is not configured"));
         }
@@ -117,7 +117,7 @@ impl OsUpdateManager {
         Ok(index.releases.into_iter().filter(|r| r.channel == self.config.release_channel && r.version > current).max_by(|a,b| a.version.cmp(&b.version)))
     }
 
-    pub async fn download_os_update(&self, release_id: &str) -> Result<PathBuf> {
+    pub async fn DownloadOsUpdate(&self, release_id: &str) -> Result<PathBuf> {
         let release = self.find_release(release_id).await?;
         let dir = self.config.state_root.join("downloads");
         fs::create_dir_all(&dir)?;
@@ -134,7 +134,7 @@ impl OsUpdateManager {
         Ok(final_path)
     }
 
-    pub async fn verify_os_update(&self, release_id: &str) -> Result<bool> {
+    pub async fn VerifyOsUpdate(&self, release_id: &str) -> Result<bool> {
         let release = self.find_release(release_id).await?;
         let path = self.config.state_root.join("downloads").join(format!("{}.osupd", safe_id(release_id)?));
         if !path.exists() { return Err(anyhow!("download not found")); }
@@ -149,10 +149,10 @@ impl OsUpdateManager {
         Ok(true)
     }
 
-    pub async fn apply_os_update(&self, release_id: &str) -> Result<UpdateRecord> {
-        if self.config.dry_run { return self.apply_dry_run(release_id).await; }
+    pub async fn ApplyOsUpdate(&self, release_id: &str) -> Result<UpdateRecord> {
+        if self.config.dry_run { return self.apply_dry_run(release_id); }
         let _lock = acquire_lock(&self.config.state_root)?;
-        if !self.verify_os_update(release_id).await? { return Err(anyhow!("OS update verification failed")); }
+        if !self.VerifyOsUpdate(release_id).await? { return Err(anyhow!("OS update verification failed")); }
         let mut state = self.load_state()?;
         if state.safe_mode { return Err(anyhow!("cannot apply OS update while in safe mode")); }
         let release = self.find_release(release_id).await?;
@@ -189,7 +189,7 @@ impl OsUpdateManager {
         Ok(record)
     }
 
-    pub fn enter_safe_mode(&self) -> Result<()> {
+    pub fn EnterSafeMode(&self) -> Result<()> {
         let mut state = self.load_state()?;
         state.safe_mode = true;
         self.save_state(&state)?;
@@ -199,7 +199,7 @@ impl OsUpdateManager {
         Ok(())
     }
 
-    pub fn exit_safe_mode(&self) -> Result<()> {
+    pub fn ExitSafeMode(&self) -> Result<()> {
         let mut state = self.load_state()?;
         state.safe_mode = false;
         self.save_state(&state)?;
@@ -208,7 +208,7 @@ impl OsUpdateManager {
         Ok(())
     }
 
-    pub fn factory_reset(&self, preserve_data: bool) -> Result<FactoryResetResult> {
+    pub fn FactoryReset(&self, preserve_data: bool) -> Result<FactoryResetResult> {
         let _lock = acquire_lock(&self.config.state_root)?;
         let root = self.config.state_root.clone();
         let volumes = root.join("volumes");
@@ -227,7 +227,7 @@ impl OsUpdateManager {
         Ok(FactoryResetResult{reset_id,preserve_data,os_wiped:true,preserved_volume_root:backup})
     }
 
-    pub fn rollback_os(&self, target_version: &str) -> Result<()> {
+    pub fn RollbackOs(&self, target_version: &str) -> Result<()> {
         let mut state = self.load_state()?;
         if state.previous_version.as_deref() != Some(target_version) && state.active_version != target_version {
             return Err(anyhow!("target version is not an available rollback target"));
@@ -243,13 +243,13 @@ impl OsUpdateManager {
         Ok(())
     }
 
-    pub fn get_update_history(&self) -> Result<Vec<UpdateRecord>> {
+    pub fn GetUpdateHistory(&self) -> Result<Vec<UpdateRecord>> {
         let path = self.config.state_root.join(HISTORY_PATH);
         if !path.exists() { return Ok(Vec::new()); }
         Ok(serde_json::from_slice(&fs::read(path)?)?)
     }
 
-    pub fn boot_health_ack(&self, version: &str) -> Result<()> {
+    pub fn BootHealthAck(&self, version: &str) -> Result<()> {
         let mut state = self.load_state()?;
         if state.pending_slot.is_none() { return Ok(()); }
         if state.active_slot != state.boot_slot { return Err(anyhow!("boot slot mismatch")); }
@@ -263,7 +263,7 @@ impl OsUpdateManager {
         Ok(())
     }
 
-    pub fn recover_failed_boot(&self) -> Result<bool> {
+    pub fn RecoverFailedBoot(&self) -> Result<bool> {
         let mut state = self.load_state()?;
         if state.pending_slot.is_none() { return Ok(false); }
         state.boot_attempts += 1;
