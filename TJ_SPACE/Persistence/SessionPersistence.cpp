@@ -122,7 +122,7 @@ bool UTJSessionPersistence::RestoreWorld(const FString& SnapshotId)
     Layout.WorldId = Root->GetStringField(TEXT("worldId"));
 
     const TSharedPtr<FJsonObject>* OriginObject = nullptr;
-    if (!Root->TryGetObjectField(TEXT("streamingOrigin"), OriginObject) || !OriginObject || !JsonToTransform(*OriginObject, *new FTransform()))
+    if (!Root->TryGetObjectField(TEXT("streamingOrigin"), OriginObject) || !OriginObject)
         return false;
     FTransform OriginTransform;
     if (!JsonToTransform(*OriginObject, OriginTransform)) return false;
