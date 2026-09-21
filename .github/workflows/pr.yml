@@ -1,0 +1,15 @@
+name: TJ SPACE PR
+on: [pull_request]
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --workspace --all-targets
+      - run: cargo build --workspace
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Build web apps
+        run: |
+          if [ -f package.json ]; then npm ci && npm run build; fi
