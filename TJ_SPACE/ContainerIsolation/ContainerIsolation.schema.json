@@ -1,0 +1,13 @@
+{
+ "$schema":"https://json-schema.org/draft/2020-12/schema",
+ "$id":"tjspace://system4/container-isolation",
+ "type":"object",
+ "required":["boundaryModes","healthStates","manifest","trafficRule"],
+ "properties":{
+  "boundaryModes":{"type":"array","items":{"enum":["solid","xray","isolation","traffic"]}},
+  "healthStates":{"type":"array","items":{"enum":["unknown","healthy","degraded","critical","stopped"]}},
+  "trafficRule":{"type":"string","const":"cross-container traffic must render as an explicit gated handshake; never a free-flowing pipe"},
+  "manifest":{"type":"object","required":["containerId","packageId","subcontainerIds","volumeMounts","limits","health"]}
+ },
+ "additionalProperties":false
+}
