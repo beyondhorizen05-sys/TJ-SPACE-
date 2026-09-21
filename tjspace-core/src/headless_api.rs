@@ -6,6 +6,7 @@ use hmac::{Hmac, Mac};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sqlx::Row;
 use sha2::Sha256;
 use std::{collections::BTreeMap, sync::Arc, time::{SystemTime, UNIX_EPOCH}};
 use crate::{Core, RpcRequest, RpcResponse};
