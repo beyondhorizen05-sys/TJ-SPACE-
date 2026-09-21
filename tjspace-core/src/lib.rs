@@ -215,6 +215,7 @@ let c=self.clone();self.register_rpc_method("ApplyPatch",move|r|{let c=c.clone()
     }
 
     pub async fn serve(self:Arc<Self>)->Result<()>{
+        self.federation.start_mdns_responder();
         let federation=self.federation.clone();
         let app=Router::new().route("/api/v1/health",get(health)).route("/api/v1/rpc",post(rpc_http)).route("/api/v1/federation/envelope",post(move |body: axum::body::Bytes| federation_envelope(self.clone(), federation.clone(), body)))
             .merge(headless_api::router(self.clone())).with_state(self.clone()).layer(tower_http::trace::TraceLayer::new_for_http().make_span_with(|request: &axum::http::Request<axum::body::Body>| { let trace_id=request.headers().get("x-trace-id").and_then(|v|v.to_str().ok()).unwrap_or("generated"); tracing::info_span!("http_request",trace_id=%trace_id,service_id="tjsd",method=%request.method(),uri=%request.uri()) }));
