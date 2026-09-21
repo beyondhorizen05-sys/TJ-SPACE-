@@ -421,3 +421,41 @@ fn parse_srv_records(data:&[u8],service:&str)->Vec<(String,u16)>{
     let mut out=Vec::new();for _ in 0..an{let _=read_name(data,&mut off);if off+10>data.len(){break;}let typ=u16::from_be_bytes([data[off],data[off+1]]);let class=u16::from_be_bytes([data[off+2],data[off+3]]);let rdlen=u16::from_be_bytes([data[off+8],data[off+9]]) as usize;off+=10;if off+rdlen>data.len(){break;}if typ==33&&class&0x7fff==1&&rdlen>=7{let port=u16::from_be_bytes([data[off+4],data[off+5]]);let mut noff=off+6;if let Ok(target)=read_name(data,&mut noff){let id=target.trim_end_matches(".local.").trim_end_matches('.').to_string();if !service.is_empty(){out.push((id,port));}}}off+=rdlen;}out}
 fn skip_name(data:&[u8],off:&mut usize)->Result<()> {let _=read_name(data,off)?;Ok(())}
 fn read_name(data:&[u8],off:&mut usize)->Result<String>{let mut pos=*off;let mut jumped=false;let mut next=*off;let mut labels=Vec::new();let mut depth=0;loop{if pos>=data.len(){return Err(anyhow!("dns name out of bounds"))}let len=data[pos];if len&0xc0==0xc0{if pos+1>=data.len(){return Err(anyhow!("dns pointer"))}let ptr=(((len as usize)&0x3f)<<8)|data[pos+1] as usize;if !jumped{next=pos+2;jumped=true}pos=ptr;depth+=1;if depth>20{return Err(anyhow!("dns pointer loop"))}continue}if len==0{pos+=1;if !jumped{next=pos}break}if len>63||pos+1+len as usize>data.len(){return Err(anyhow!("dns label"))}labels.push(String::from_utf8_lossy(&data[pos+1..pos+1+len as usize]).into_owned());pos+=1+len as usize;}*off=next;Ok(if labels.is_empty(){String::new()}else{format!("{}.",labels.join("."))})}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn session_key_is_symmetric() {
+        let shared=[7u8;32];
+        assert_eq!(key_for(&shared,"a","b"),key_for(&shared,"b","a"));
+    }
+
+    #[test]
+    fn decode32_accepts_exact_key_length() {
+        assert!(decode32(&"aa".repeat(32)).is_ok());
+        assert!(decode32("aa").is_err());
+    }
+
+    #[test]
+    fn scope_rejects_control_and_space() {
+        assert!(validate_scope("registry:read").is_ok());
+        assert!(validate_scope("registry read").is_err());
+        assert!(validate_scope("registry\nread").is_err());
+    }
+
+    #[test]
+    fn endpoint_requires_http_or_https() {
+        assert!(validate_endpoint("https://peer.local:8090").is_ok());
+        assert!(validate_endpoint("ftp://peer.local:21").is_err());
+    }
+
+    #[test]
+    fn mdns_query_contains_service_question() {
+        let q=mdns_ptr_query(SERVICE);
+        assert_eq!(u16::from_be_bytes([q[4],q[5]]),1);
+        assert!(q.windows(8).any(|w| w==b"_tjspace"));
+    }
+}
