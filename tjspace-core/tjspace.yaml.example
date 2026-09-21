@@ -1,0 +1,7 @@
+database_url: postgresql://tjs:change-me@127.0.0.1:5432/tjspace
+bind: 127.0.0.1:8090
+auth_token: change-me
+node_id: citadel-01
+runtime:
+  dry_run: false
+  command_timeout_seconds: 30
