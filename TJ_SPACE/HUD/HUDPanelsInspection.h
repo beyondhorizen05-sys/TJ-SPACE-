@@ -1,0 +1,13 @@
+#pragma once
+#include "CoreMinimal.h"
+#include "UObject/Object.h"
+#include "HUDPanelsInspection.generated.h"
+UENUM(BlueprintType) enum class ETJOverlayMode:uint8{Off,Topology,XRay,Dependencies};
+USTRUCT(BlueprintType) struct TJSPACE_API FTJHUDState{GENERATED_BODY() UPROPERTY(BlueprintReadWrite) FString Location; UPROPERTY(BlueprintReadWrite) int32 Alerts=0; UPROPERTY(BlueprintReadWrite) float CPU01=0; UPROPERTY(BlueprintReadWrite) float Memory01=0; UPROPERTY(BlueprintReadWrite) float Network01=0;};
+USTRUCT(BlueprintType) struct TJSPACE_API FTJPanelState{GENERATED_BODY() UPROPERTY(BlueprintReadWrite) FString TargetId; UPROPERTY(BlueprintReadWrite) bool bVisible=false; UPROPERTY(BlueprintReadWrite) FString DataSummary;};
+USTRUCT(BlueprintType) struct TJSPACE_API FTJDebugLayer{GENERATED_BODY() UPROPERTY(BlueprintReadWrite) FString LayerId; UPROPERTY(BlueprintReadWrite) bool bEnabled=false;};
+UCLASS(BlueprintType) class TJSPACE_API UTJHUDClientStateStore:public UObject{GENERATED_BODY()
+public: UPROPERTY(BlueprintReadOnly) FTJHUDState HUD; UPROPERTY(BlueprintReadOnly) TMap<FString,FTJPanelState> Panels; UPROPERTY(BlueprintReadOnly) ETJOverlayMode Overlay=ETJOverlayMode::Off; UPROPERTY(BlueprintReadOnly) TMap<FString,bool> DebugLayers; UPROPERTY(BlueprintReadOnly) FString SearchQuery; DECLARE_MULTICAST_DELEGATE(FOnStateChanged); FOnStateChanged OnStateChanged; void PublishHUD(const FTJHUDState&); void PublishPanel(const FString&,const FTJPanelState&); void PublishOverlay(ETJOverlayMode); void PublishDebugLayer(const FString&,bool); void PublishSearch(const FString&);};
+UCLASS(BlueprintType) class TJSPACE_API UTJHUDPanelsInspection:public UObject{GENERATED_BODY()
+public: UFUNCTION(BlueprintCallable) bool RenderHUD(const FTJHUDState&); UFUNCTION(BlueprintCallable) bool RenderServicePanel(const FString&); UFUNCTION(BlueprintCallable) bool RenderContainerPanel(const FString&); UFUNCTION(BlueprintCallable) bool RenderNetworkOverlay(ETJOverlayMode); UFUNCTION(BlueprintCallable) bool RenderXRayOverlay(ETJOverlayMode); UFUNCTION(BlueprintCallable) bool RenderDependencyOverlay(); UFUNCTION(BlueprintCallable) bool RenderDebugOverlay(const FString&); UFUNCTION(BlueprintCallable) bool RenderSearchAndNavigate(const FString&); UFUNCTION(BlueprintCallable) UTJHUDClientStateStore* GetClientStateStore()const{return StateStore;};
+private: UPROPERTY() TObjectPtr<UTJHUDClientStateStore> StateStore;};
