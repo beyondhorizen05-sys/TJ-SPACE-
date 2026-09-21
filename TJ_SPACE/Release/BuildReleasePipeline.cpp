@@ -1,0 +1,11 @@
+#include "BuildReleasePipeline.h"
+bool UTJBuildReleasePipeline::IsSupportedTarget(const FString&T)const{return T==TEXT("x86_64-unknown-linux-gnu")||T==TEXT("aarch64-unknown-linux-gnu")||T==TEXT("riscv64gc-unknown-linux-gnu");}
+TArray<FString> UTJBuildReleasePipeline::GetSupportedTargets()const{return {TEXT("x86_64-unknown-linux-gnu"),TEXT("aarch64-unknown-linux-gnu"),TEXT("riscv64gc-unknown-linux-gnu")};}
+bool UTJBuildReleasePipeline::BuildRustBinaries(const FString&T){if(!IsSupportedTarget(T))return false;for(const FString&N:{TEXT("tjs-box"),TEXT("tjs-container"),TEXT("tjs-cli")}){FTJReleaseArtifact&A=CurrentRelease.Artifacts.AddDefaulted_GetRef();A.Name=N;A.TargetTriple=T;}return true;}
+bool UTJBuildReleasePipeline::BuildWebUIs(const FString&A){if(A.IsEmpty())return false;FTJReleaseArtifact&X=CurrentRelease.Artifacts.AddDefaulted_GetRef();X.Name=A;X.Path=FString::Printf(TEXT("web/%s"),*A);return true;}
+bool UTJBuildReleasePipeline::BuildSdk(){FTJReleaseArtifact&X=CurrentRelease.Artifacts.AddDefaulted_GetRef();X.Name=TEXT("@tjspace/start-sdk");X.Path=TEXT("sdk/package");return true;}
+bool UTJBuildReleasePipeline::BuildInstallerImage(const FString&T){if(!IsSupportedTarget(T))return false;FTJReleaseArtifact&X=CurrentRelease.Artifacts.AddDefaulted_GetRef();X.Name=TEXT("tjspace-installer");X.TargetTriple=T;return true;}
+bool UTJBuildReleasePipeline::PackageRelease(const FString&V,const FString&C){if(V.IsEmpty()||C.IsEmpty()||CurrentRelease.Artifacts.Num()==0)return false;CurrentRelease.Version=V;CurrentRelease.Channel=C;return true;}
+bool UTJBuildReleasePipeline::SignRelease(const FTJReleaseArtifact&A,const FString&K){if(A.Name.IsEmpty()||K.IsEmpty())return false;for(FTJReleaseArtifact&X:CurrentRelease.Artifacts)if(X.Name==A.Name&&X.TargetTriple==A.TargetTriple){X.Signature=FString::Printf(TEXT("sig:%s:%s"),*CurrentRelease.Version,*K);CurrentRelease.bSigned=true;return true;}return false;}
+bool UTJBuildReleasePipeline::PublishRelease(const FTJRelease&R){if(R.Version.IsEmpty()||R.Artifacts.Num()==0||!R.bSigned)return false;CurrentRelease.bPublished=true;return true;}
+bool UTJBuildReleasePipeline::VerifyRelease(const FTJReleaseArtifact&A)const{return !A.Name.IsEmpty()&&!A.Signature.IsEmpty()&&A.Signature.StartsWith(TEXT("sig:"));}
