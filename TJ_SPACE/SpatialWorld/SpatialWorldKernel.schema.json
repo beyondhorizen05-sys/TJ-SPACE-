@@ -3,41 +3,66 @@
   "$id": "tjspace://system2/spatial-world-kernel",
   "title": "TJ SPACE Spatial World Kernel",
   "type": "object",
-  "required": ["version", "world", "streaming", "zones"],
+  "required": ["version", "world", "streaming", "citadel", "entities", "districts", "environment"],
   "properties": {
-    "version": { "type": "string", "const": "1.0.0" },
+    "version": {"type": "string", "const": "2.0.0"},
     "world": {
       "type": "object",
-      "required": ["units", "origin", "coordinateSystem"],
+      "required": ["units", "coordinateSystem", "origin"],
       "properties": {
-        "units": { "type": "string", "const": "centimeters" },
-        "origin": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
-        "coordinateSystem": { "type": "string", "const": "right-handed-z-up" }
+        "units": {"type": "string", "const": "centimeters"},
+        "coordinateSystem": {"type": "string", "const": "right-handed-z-up"},
+        "origin": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3}
       },
       "additionalProperties": false
     },
-    "streaming": {
+    "citadel": {
       "type": "object",
-      "required": ["enabled", "cellSize", "loadingRange"],
+      "required": ["worldId", "streamingEnabled", "districtCellSize", "districtLoadingRange"],
       "properties": {
-        "enabled": { "type": "boolean", "const": true },
-        "cellSize": { "type": "number", "exclusiveMinimum": 0 },
-        "loadingRange": { "type": "number", "exclusiveMinimum": 0 }
+        "worldId": {"type": "string", "minLength": 1},
+        "streamingEnabled": {"type": "boolean"},
+        "districtCellSize": {"type": "number", "exclusiveMinimum": 0},
+        "districtLoadingRange": {"type": "number", "exclusiveMinimum": 0}
       },
       "additionalProperties": false
     },
-    "zones": {
+    "entities": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "center", "extent"],
+        "required": ["backendId", "transform", "districtId"],
         "properties": {
-          "id": { "type": "string", "pattern": "^[a-z0-9._-]+$" },
-          "center": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
-          "extent": { "type": "array", "items": { "type": "number", "exclusiveMinimum": 0 }, "minItems": 3, "maxItems": 3 }
+          "backendId": {"type": "string", "minLength": 1},
+          "transform": {"type": "array", "items": {"type": "number"}, "minItems": 10, "maxItems": 10},
+          "districtId": {"type": "string", "minLength": 1}
         },
         "additionalProperties": false
       }
+    },
+    "districts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "x", "y", "loaded"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "x": {"type": "integer"},
+          "y": {"type": "integer"},
+          "loaded": {"type": "boolean"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "environment": {
+      "type": "object",
+      "required": ["health01", "load01", "fault01"],
+      "properties": {
+        "health01": {"type": "number", "minimum": 0, "maximum": 1},
+        "load01": {"type": "number", "minimum": 0, "maximum": 1},
+        "fault01": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false
