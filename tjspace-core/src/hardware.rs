@@ -652,8 +652,12 @@ async fn grow_fs(fs_type:&str,device:&str)->Result<()>{
         _=>Ok(())
     }
 }
-async fn shrink_fs(fs_type:&str,device:&str)->Result<()>{
-    match fs_type {"ext4"=>run_checked("e2fsck",&["-f",device],120).await.map(|_|()),"xfs"|"btrfs"=>Err(anyhow!("online shrink is not supported for {fs_type}")), _=>Err(anyhow!("filesystem shrink unsupported"))}
+async fn shrink_fs(fs_type:&str,device:&str,new_size:u64)->Result<()>{
+    match fs_type {
+        "ext4" => { run_checked("e2fsck",&["-f",device],120).await?; let size_arg=format!("{new_size}B"); run_checked("resize2fs",&[device,&size_arg],120).await.map(|_|()) },
+        "xfs"|"btrfs" => Err(anyhow!("filesystem shrink is not supported for {fs_type}")),
+        _ => Err(anyhow!("filesystem shrink unsupported")),
+    }
 }
 fn parse_kib(s:&str)->Option<u64>{s.split_whitespace().next()?.parse::<u64>().ok().map(|v|v*1024)}
 fn split_nmcli(s:&str)->Vec<String>{
