@@ -71,8 +71,8 @@ pub async fn register_rpc(core:&Arc<Core>){
 
 fn flatten_json(prefix:&str,v:&Value)->Vec<(String,Value)>{let mut out=Vec::new();match v{Value::Object(m)=>for(k,x)in m{let p=if prefix.is_empty(){k.clone()}else{format!("{prefix}.{k}")};out.extend(flatten_json(&p,x));},_=>out.push((prefix.into(),v.clone()))}out}
 
-pub async fn serve_api(core:Arc<Core>)->Result<()>{
-    let app=Router::new()
+pub fn router(core:Arc<Core>)->Router<Arc<Core>>{
+    Router::new()
       .route("/api/v1/status",get(api_get_status).post(api_get_status))
       .route("/api/v1/service/:action",post(api_dispatch))
       .route("/api/v1/package/:action",post(api_dispatch))
@@ -84,8 +84,11 @@ pub async fn serve_api(core:Arc<Core>)->Result<()>{
       .route("/api/v1/diag/:action",post(api_dispatch))
       .route("/api/v1/{*command}",post(api_command))
       .with_state(core.clone())
-      .layer(middleware::from_fn_with_state(core.clone(),jwt_middleware));
-    let listener=tokio::net::TcpListener::bind(&core.config.bind).await?;axum::serve(listener,app).await?;Ok(())
+      .layer(middleware::from_fn_with_state(core, jwt_middleware))
+}
+pub async fn serve_api(core:Arc<Core>)->Result<()>{
+    let listener=tokio::net::TcpListener::bind(&core.config.bind).await?;
+    axum::serve(listener,router(core)).await?;Ok(())
 }
 async fn jwt_middleware(State(core):State<Arc<Core>>,headers:HeaderMap,req:axum::extract::Request,next:Next)->Result<Response,StatusCode>{
     let token=headers.get("authorization").and_then(|v|v.to_str().ok()).and_then(|v|v.strip_prefix("Bearer ")).ok_or(StatusCode::UNAUTHORIZED)?;
