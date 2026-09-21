@@ -1,0 +1,50 @@
+{
+  "version": "1.0.0",
+  "states": ["stopped", "starting", "running", "error", "updating"],
+  "transitionMatrix": [
+    {"from":"stopped","to":"stopped","curve":"linear","durationSeconds":0.0},
+    {"from":"stopped","to":"starting","curve":"cubicEaseInOut","durationSeconds":1.20},
+    {"from":"stopped","to":"running","curve":"quinticEaseOut","durationSeconds":2.40},
+    {"from":"stopped","to":"error","curve":"cubicEaseInOut","durationSeconds":0.90},
+    {"from":"stopped","to":"updating","curve":"cubicEaseInOut","durationSeconds":1.40},
+
+    {"from":"starting","to":"stopped","curve":"cubicEaseInOut","durationSeconds":0.80},
+    {"from":"starting","to":"starting","curve":"linear","durationSeconds":0.0},
+    {"from":"starting","to":"running","curve":"cubicEaseOut","durationSeconds":1.10},
+    {"from":"starting","to":"error","curve":"cubicEaseOut","durationSeconds":1.10},
+    {"from":"starting","to":"updating","curve":"cubicEaseInOut","durationSeconds":0.95},
+
+    {"from":"running","to":"stopped","curve":"quinticEaseOut","durationSeconds":0.75},
+    {"from":"running","to":"starting","curve":"cubicEaseInOut","durationSeconds":0.70},
+    {"from":"running","to":"running","curve":"linear","durationSeconds":0.0},
+    {"from":"running","to":"error","curve":"cubicEaseInOut","durationSeconds":0.65},
+    {"from":"running","to":"updating","curve":"cubicEaseInOut","durationSeconds":1.00},
+
+    {"from":"error","to":"stopped","curve":"cubicEaseInOut","durationSeconds":1.30},
+    {"from":"error","to":"starting","curve":"cubicEaseOut","durationSeconds":1.00},
+    {"from":"error","to":"running","curve":"quinticEaseOut","durationSeconds":2.00},
+    {"from":"error","to":"error","curve":"linear","durationSeconds":0.0},
+    {"from":"error","to":"updating","curve":"cubicEaseInOut","durationSeconds":0.90},
+
+    {"from":"updating","to":"stopped","curve":"cubicEaseInOut","durationSeconds":1.00},
+    {"from":"updating","to":"starting","curve":"cubicEaseInOut","durationSeconds":0.85},
+    {"from":"updating","to":"running","curve":"quinticEaseOut","durationSeconds":1.60},
+    {"from":"updating","to":"error","curve":"cubicEaseOut","durationSeconds":0.80},
+    {"from":"updating","to":"updating","curve":"linear","durationSeconds":0.0}
+  ],
+  "manifest": {
+    "packageId": "example.service",
+    "displayName": "Example Service",
+    "buildingMesh": "/Game/TJ_SPACE/Services/SM_ServiceBuilding.SM_ServiceBuilding",
+    "interiorMesh": "/Game/TJ_SPACE/Services/SM_ServiceInterior.SM_ServiceInterior",
+    "interiorModuleMeshes": [],
+    "interfaces": [],
+    "dependencies": [],
+    "resources": {
+      "cpuCores": 2,
+      "memoryGB": 4,
+      "storageGB": 20,
+      "networkMbps": 100
+    }
+  }
+}
