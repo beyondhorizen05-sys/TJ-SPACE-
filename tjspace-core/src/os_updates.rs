@@ -245,7 +245,7 @@ impl OsUpdateManager {
         Ok(())
     }
 
-    pub fn GetUpdateHistory(&self) -> Result<Vec<UpdateRecord>> {
+    pub fn IsSafeMode(&self) -> Result<bool> { Ok(self.load_state()?.safe_mode) }\n\n    pub fn GetUpdateHistory(&self) -> Result<Vec<UpdateRecord>> {
         let path = self.config.state_root.join(HISTORY_PATH);
         if !path.exists() { return Ok(Vec::new()); }
         Ok(serde_json::from_slice(&fs::read(path)?)?)
