@@ -4,6 +4,10 @@
 
 Owns the spatial coordinate authority, world-space bounds, zone registration, spatial lookup, streaming origin, and deterministic zone load-state calculation.
 
+## 3D presentation requirement
+
+TJ SPACE is a real-time 3D spatial world. This kernel represents actual Unreal Engine world-space coordinates and bounds; it is not a 2D, pixel-art, tile-art, voxel, or sprite-based world. Spatial zones are volumetric 3D regions using FVector center/extent values. The visual appearance remains governed by the already-established TJ SPACE 3D foundation.
+
 ## Spatial contract
 
 - Unreal world units: centimeters.
