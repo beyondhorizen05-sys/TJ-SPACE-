@@ -1,5 +1,6 @@
 use anyhow::{bail, Context, Result};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{fs::{self, File}, io::{Read, Seek, SeekFrom, Write}, path::{Path, PathBuf}};
@@ -123,7 +124,6 @@ pub fn sign_s9pk(s9pk_path: impl AsRef<Path>, private_key: &[u8]) -> Result<()> 
     let footer=SignatureFooter{merkle_root:hex::encode(root),signature:base64::Engine::encode(&base64::engine::general_purpose::STANDARD,sig.to_bytes())};
     let bytes=serde_json::to_vec(&footer)?;
     let mut f=File::options().read(true).write(true).open(path)?;
-    let len=f.metadata()?.len();
     f.seek(SeekFrom::End(-8))?;
     f.write_all(&(bytes.len() as u64).to_le_bytes())?;
     f.seek(SeekFrom::End(0))?;
@@ -134,7 +134,11 @@ pub fn sign_s9pk(s9pk_path: impl AsRef<Path>, private_key: &[u8]) -> Result<()> 
 pub fn verify_s9pk(s9pk_path: impl AsRef<Path>, public_key: &[u8]) -> Result<()> {
     let path=s9pk_path.as_ref();
     let (index, entries)=read_index(path)?;
-    let computed=merkle_root(&entries);
+    let body=read_body(path)?;
+    let actual=tar_entries(&body)?;
+    if actual.len()!=entries.len() { bail!("package entry count mismatch"); }
+    for (expected, found) in entries.iter().zip(actual.iter()) { if expected.path!=found.path || expected.hash!=found.hash || expected.length!=found.length { bail!("package content integrity mismatch: {}", expected.path); } }
+    let computed=merkle_root(&actual);
     if hex::encode(computed) != index.merkle_root { bail!("Merkle root mismatch"); }
     let footer=read_footer(path)?;
     if footer.merkle_root != hex::encode(computed) { bail!("signature root mismatch"); }
@@ -194,7 +198,7 @@ fn read_index(path:&Path)->Result<(PackageIndex,Vec<IndexEntry>)>{
     let mut bytes=vec![0;len]; f.read_exact(&mut bytes)?; let idx:PackageIndex=serde_json::from_slice(&bytes)?; Ok((idx.clone(),idx.files))
 }
 fn read_body(path:&Path)->Result<Vec<u8>>{let mut f=File::open(path)?;let mut all=Vec::new();f.read_to_end(&mut all)?;let (_,_,body)=split_sections(&all)?;Ok(body)}
-fn read_footer(path:&Path)->Result<SignatureFooter>{let mut f=File::open(path)?;let len=f.metadata()?.len();if len<11{bail!("truncated package")}f.seek(SeekFrom::End(-8))?;let mut n=[0;8];f.read_exact(&mut n)?;let flen=u64::from_le_bytes(n);if flen==0{bail!("package is unsigned")}if flen>len{bail!("invalid footer length")}f.seek(SeekFrom::End(-8-(flen as i64)))?;let mut b=vec![0;flen as usize];f.read_exact(&mut b)?;Ok(serde_json::from_slice(&b)?)} 
+fn read_footer(path:&Path)->Result<SignatureFooter>{let mut f=File::open(path)?;let len=f.metadata()?.len();if len<12{bail!("truncated package")}f.seek(SeekFrom::End(-8))?;let mut n=[0;8];f.read_exact(&mut n)?;let flen=u64::from_le_bytes(n);if flen==0||flen>len-12{bail!("invalid footer length")}let start=len-8-flen;f.seek(SeekFrom::Start(start-4))?;let mut magic=[0;4];f.read_exact(&mut magic)?;if magic!=*FOOTER_MAGIC{bail!("invalid footer magic")}let mut b=vec![0;flen as usize];f.read_exact(&mut b)?;Ok(serde_json::from_slice(&b)?)} 
 fn split_sections(all:&[u8])->Result<(PackageIndex,usize,Vec<u8>)>{if all.len()<15||all[..3]!=S9PK_HEADER{bail!("invalid S9PK header")}let mut p=3;if &all[p..p+4]!=INDEX_MAGIC{bail!("invalid S9PK index")};p+=4;let mut n=[0;8];n.copy_from_slice(&all[p..p+8]);p+=8;let ilen=u64::from_le_bytes(n) as usize;if p+ilen>all.len(){bail!("truncated index")}let idx:PackageIndex=serde_json::from_slice(&all[p..p+ilen])?;p+=ilen;let body_end=all.windows(4).rposition(|w|w==FOOTER_MAGIC).context("footer missing")?;Ok((idx,p,all[p..body_end].to_vec()))}
 
 #[cfg(test)]
