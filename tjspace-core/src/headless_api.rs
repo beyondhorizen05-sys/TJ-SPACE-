@@ -106,7 +106,7 @@ async fn api_dispatch(State(core):State<Arc<Core>>,Path(action):Path<String>,Jso
     if out.ok{Ok(Json(out.result.unwrap_or(Value::Null)))}else{Err(if out.error.as_ref().map(|e|e.code.as_str())==Some("METHOD_NOT_FOUND"){StatusCode::NOT_FOUND}else{StatusCode::BAD_REQUEST})}
 }
 fn method_for_path(method:&str,_action:&str)->String{method.into()}
-fn rpc_for_path(path:&str)->Option<String>{
+pub fn rpc_for_path(path:&str)->Option<String>{
     match path.trim_matches('/') {
         "status"=>Some("GetSystemState".into()),
         "service/list"=>Some("ListServices".into()),"service/start"=>Some("StartService".into()),"service/stop"=>Some("StopService".into()),"service/restart"=>Some("RestartService".into()),"service/logs"=>Some("ServiceLogs".into()),"service/config"=>Some("ServiceConfig".into()),
