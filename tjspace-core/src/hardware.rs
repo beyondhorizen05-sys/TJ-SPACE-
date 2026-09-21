@@ -375,7 +375,7 @@ impl HardwareManager {
                 args.extend(refs);
                 run_checked("vgcreate", &args, self.config.command_timeout_seconds).await?;
             }
-            run_checked("lvcreate", &["-n", &lv, "-l", "100%FREE", &vg], self.config.command_timeout_seconds).await?;
+            run_checked("lvcreate", &["-n", &lv, "-l", "90%FREE", &vg], self.config.command_timeout_seconds).await?;
             let device = format!("/dev/{vg}/{lv}");
             run_checked("mkfs", &["-t", fs_type, &device], self.config.command_timeout_seconds).await?;
         }
