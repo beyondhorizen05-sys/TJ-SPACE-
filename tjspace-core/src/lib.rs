@@ -5,6 +5,7 @@ pub mod install;
 pub mod lxc;
 pub mod net;
 pub mod os_install;
+pub mod patch_db;
 pub mod registry;
 pub mod s9pk;
 pub mod service;
@@ -43,9 +44,10 @@ fn default_timeout()->u64{30}
 #[derive(Debug, Clone, Serialize)]
 pub struct SystemState {
     pub node_id:String,
+    #[serde(default="default_patch_db")] pub patch_db_path:String,
     pub version:String,
     pub initialized:bool,
-    pub services:Vec<service::ServiceRecord>,
+    pub services:Vec<service::ServiceRecord>,pub state_revision:u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -84,8 +86,8 @@ impl Core {
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_|"info".into())
         ).try_init().ok();
         let db=db::connect(&config.database_url).await?;
-        db::migrate(&db).await?;
-        let core=Arc::new(Self{config,db,handlers:Arc::new(RwLock::new(HashMap::new()))});
+        db::migrate(&db).await?;let patch_db=patch_db::PatchDb::open_database(&config.patch_db_path)?;
+        let core=Arc::new(Self{config,db,handlers:Arc::new(RwLock::new(HashMap::new())),patch_db});
         core.register_builtin_methods().await;
         tracing::info!(trace_id=%Uuid::new_v4(),service_id="tjsd","core_initialized");
         Ok(core)
@@ -120,7 +122,7 @@ impl Core {
         self.config.auth_token.is_empty() || token==Some(self.config.auth_token.as_str())
     }
     pub async fn get_system_state(&self)->Result<SystemState>{
-        Ok(SystemState{node_id:self.config.node_id.clone(),version:version::VERSION.into(),initialized:true,services:service::list(&self.db).await?})
+        Ok(SystemState{node_id:self.config.node_id.clone(),version:version::VERSION.into(),initialized:true,services:service::list(&self.db).await?,state_revision:self.patch_db.get_revision()?})
     }
     pub async fn start_service(&self,p:&str)->Result<()>{service::start(&self.db,&self.config.runtime,p).await}
     pub async fn stop_service(&self,p:&str,g:bool)->Result<()>{service::stop(&self.db,&self.config.runtime,p,g).await}
@@ -132,7 +134,7 @@ impl Core {
     pub async fn sign_artifact(&self,b:&[u8],k:&[u8])->Result<Vec<u8>>{sign::sign(b,k)}
     pub async fn verify_artifact(&self,b:&[u8],s:&[u8])->Result<()> {sign::verify(b,s)}
 
-    async fn register_builtin_methods(self:&Arc<Self>){
+    async fn register_builtin_methods(self:&Arc<Self>){let c=self.clone();self.register_rpc_method("ApplyPatch",move|r|{let c=c.clone();async move{let p:patch_db::Patch=serde_json::from_value(r.params)?;Ok(serde_json::to_value(c.patch_db.apply_patch(p)?)?)}}).await;
         let c=self.clone();self.register_rpc_method("GetSystemState",move|_|{let c=c.clone();async move{Ok(serde_json::to_value(c.get_system_state().await?)?)}}).await;
         let c=self.clone();self.register_rpc_method("StartService",move|r|{let c=c.clone();async move{let p=r.params["package_id"].as_str().ok_or_else(||anyhow::anyhow!("package_id required"))?;c.start_service(p).await?;Ok(json!({"started":p}))}}).await;
         let c=self.clone();self.register_rpc_method("StopService",move|r|{let c=c.clone();async move{let p=r.params["package_id"].as_str().ok_or_else(||anyhow::anyhow!("package_id required"))?;let g=r.params["graceful"].as_bool().unwrap_or(true);c.stop_service(p,g).await?;Ok(json!({"stopped":p,"graceful":g}))}}).await;
