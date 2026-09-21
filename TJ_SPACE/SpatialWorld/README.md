@@ -45,7 +45,7 @@ Delegates report entity, district, and environment state transitions.
 
 The registry keeps both backend-to-actor and actor-to-backend maps. Registration is rejected for empty IDs, duplicate IDs, invalid actors, or actors already registered.
 
-District streaming uses integer world-space cells and the configured loading radius. The implementation is compatible with Unreal World Partition's grid/cell streaming model; World Partition itself uses a persistent world subdivided into streamable grid cells and distance-based streaming sources. citeturn0search0turn0search3
+District streaming uses integer world-space cells and the configured loading radius. The implementation is compatible with Unreal World Partition's grid/cell streaming model; World Partition itself uses a persistent world subdivided into streamable grid cells and distance-based streaming sources.
 
 Environment health is normalized to 0..1 and drives the existing System 1 material scalar `DegradedStrained`, plus optional health/load/fault material parameters when present.
 
@@ -60,7 +60,7 @@ The only cross-system integration is with System 1:
 - System 1's existing 3D material and pipeline rules remain unchanged.
 - No replacement UI or rendering stack is introduced here.
 
-World Partition is used only as the Unreal runtime spatial substrate for the Citadel. Unreal documents World Partition as a distance-based grid-cell streaming system and exposes streaming configuration and streaming-source concepts. citeturn0search0turn0search2
+World Partition is used only as the Unreal runtime spatial substrate for the Citadel. Unreal documents World Partition as a distance-based grid-cell streaming system and exposes streaming configuration and streaming-source concepts.
 
 ## D6 — Failure modes
 
