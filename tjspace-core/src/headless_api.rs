@@ -121,7 +121,7 @@ fn rpc_for_path(path:&str)->Option<String>{
 
 #[derive(Parser,Debug)]
 #[command(name="tjspace-cli",version,about="TJ SPACE headless control CLI")]
-pub struct Cli{#[arg(long,default_value="http://127.0.0.1:8090")]pub endpoint:String,#[arg(long)]pub token:Option<String>,#[arg(long)]pub json:bool,#[arg(long)]pub quiet:bool,#[command(subcommand)]pub command:CliCommand}
+pub struct Cli{#[arg(long,default_value="http://127.0.0.1:8090")]pub endpoint:String,#[arg(long)]pub token:Option<String>,#[arg(long)]pub jwt_secret:Option<String>,#[arg(long)]pub json:bool,#[arg(long)]pub quiet:bool,#[command(subcommand)]pub command:CliCommand}
 #[derive(Subcommand,Debug)]
 pub enum CliCommand{
  Status,
@@ -137,7 +137,7 @@ pub enum CliCommand{
 #[derive(Subcommand,Debug)]pub enum DiagCommand{Dump,Restore{snapshot:std::path::PathBuf}}
 
 pub async fn run_cli(cli:Cli)->i32{
-    let token=match cli.token.or_else(||std::env::var("TJS_JWT_TOKEN").ok()){Some(t)=>t,None=>{eprintln!("authentication token required");return EXIT_AUTH}};
+    let token=match cli.token.or_else(||std::env::var("TJS_JWT_TOKEN").ok()){Some(t)=>t,None=>match cli.jwt_secret.or_else(||std::env::var("TJS_JWT_SECRET").ok()){Some(s)=>match issue_jwt(&s,"tjspace-cli","admin",3600){Ok(t)=>t,Err(e)=>{eprintln!("{e}");return EXIT_AUTH}},None=>{eprintln!("JWT token or TJS_JWT_SECRET required");return EXIT_AUTH}}};
     let client=Client::new();
     let call=|method:String,params:Value|{let client=client.clone();let endpoint=cli.endpoint.clone();let token=token.clone();async move{
         let req=ApiEnvelope{method,params,trace_id:None};let path=rpc_path(&method);let r=client.post(format!("{endpoint}{path}")).bearer_auth(token).json(&req).send().await?;let status=r.status();let v:RpcResponse=r.json().await?;if !status.is_success()||!v.ok{return Err(anyhow!(v.error.map(|e|e.message).unwrap_or_else(||format!("HTTP {status}"))))}Ok(v.result.unwrap_or(Value::Null))}}};
