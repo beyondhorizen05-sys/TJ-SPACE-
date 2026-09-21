@@ -116,6 +116,25 @@ impl FederationManager {
     }
 
     pub fn node_id(&self) -> &str { &self.identity.node_id }
+    pub fn start_mdns_responder(&self) {
+        let node_id=self.node_id().to_string();
+        let port=self.config.peer_port;
+        std::thread::spawn(move || {
+            let socket=match std::net::UdpSocket::bind(("0.0.0.0",5353)) {
+                Ok(s)=>s,
+                Err(e)=>{tracing::warn!(trace_id=%Uuid::new_v4(),service_id="tjsd",error=%e,"mdns_responder_unavailable");return;}
+            };
+            let _=socket.join_multicast_v4(&Ipv4Addr::new(224,0,0,251),&Ipv4Addr::UNSPECIFIED);
+            let mut buf=[0u8;9000];
+            loop {
+                let (n,src)=match socket.recv_from(&mut buf){Ok(v)=>v,Err(e)=>{tracing::warn!(trace_id=%Uuid::new_v4(),service_id="tjsd",error=%e,"mdns_responder_receive_failed");continue;}};
+                if !buf[..n].windows(SERVICE.len()).any(|w| w==SERVICE.as_bytes()) {continue;}
+                let response=mdns_response(&node_id,port);
+                let _=socket.send_to(&response,src);
+            }
+        });
+    }
+
 
     pub fn DiscoverPeers(&self) -> Result<Vec<Peer>> {
         let discovered = discover_mdns(self.config.mdns_timeout_ms, self.config.peer_port)?;
@@ -428,6 +447,26 @@ fn discover_mdns(timeout_ms:u64, default_port:u16)->Result<Vec<Peer>>{
     }
     Ok(peers.into_values().collect())
 }
+fn mdns_response(node_id:&str,port:u16)->Vec<u8>{
+    let instance=format!("{}.{}",node_id,SERVICE);
+    let target=format!("{}.local.",node_id);
+    let mut out=vec![0,0,0x84,0,0,0,0,2,0,0,0,0];
+    for name in [SERVICE.trim_end_matches('.'),instance.trim_end_matches('.')].iter(){
+        for p in name.split('.') {out.push(p.len() as u8);out.extend_from_slice(p.as_bytes());}out.push(0);
+        out.extend_from_slice(&if *name==SERVICE.trim_end_matches('.') {12u16}else{33u16}.to_be_bytes());
+        out.extend_from_slice(&1u16.to_be_bytes());out.extend_from_slice(&120u32.to_be_bytes());
+        if *name==SERVICE.trim_end_matches('.') {
+            let mut r=Vec::new();for p in instance.trim_end_matches('.').split('.') {r.push(p.len() as u8);r.extend_from_slice(p.as_bytes());}r.push(0);
+            out.extend_from_slice(&(r.len() as u16).to_be_bytes());out.extend_from_slice(&r);
+        } else {
+            let mut r=vec![0,0,0,0];r.extend_from_slice(&port.to_be_bytes());
+            for p in target.trim_end_matches('.').split('.') {r.push(p.len() as u8);r.extend_from_slice(p.as_bytes());}r.push(0);
+            out.extend_from_slice(&(r.len() as u16).to_be_bytes());out.extend_from_slice(&r);
+        }
+    }
+    out
+}
+
 fn mdns_ptr_query(name:&str)->Vec<u8>{let mut out=vec![0,0,0,0,0,1,0,0,0,0,0,0];for p in name.trim_end_matches('.').split('.') {out.push(p.len() as u8);out.extend_from_slice(p.as_bytes());}out.push(0);out.extend_from_slice(&12u16.to_be_bytes());out.extend_from_slice(&1u16.to_be_bytes());out}
 fn parse_srv_records(data:&[u8],service:&str)->Vec<(String,u16)>{
     if data.len()<12{return vec![]} let qd=u16::from_be_bytes([data[4],data[5]]) as usize;let an=u16::from_be_bytes([data[6],data[7]]) as usize;let mut off=12;
