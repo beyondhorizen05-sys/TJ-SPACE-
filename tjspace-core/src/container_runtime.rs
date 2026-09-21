@@ -416,7 +416,7 @@ fn validate_container_id(value: &str) -> Result<()> {
     Ok(())
 }
 fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace(''', "'\\''"))
+    format!("'{}'", value.replace('\'', "'\\\\''"))
 }
 
 #[cfg(test)]
