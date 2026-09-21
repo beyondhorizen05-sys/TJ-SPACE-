@@ -38,7 +38,7 @@ sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid"
 tar = "0.4"
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
-tokio-stream = "0.1"
+tokio-stream = { version = "0.1", features = ["net"] }
 prost = "0.14"
 tonic = { version = "0.14", features = ["transport"] }
 tonic-prost = "0.14"
