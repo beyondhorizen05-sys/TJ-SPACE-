@@ -226,16 +226,19 @@ impl SyncBridge {
         let limit = self.config.max_batch_diffs.max(1);
         let mut batches = Vec::new();
         let mut current: Vec<SequencedDiff> = Vec::new();
-        let mut last_path: Option<String> = None;
+        let mut indexes: HashMap<String, usize> = HashMap::new();
         for diff in diffs.iter().cloned() {
             let path = diff.diff.patch.path.clone();
-            if current.len() >= limit || last_path.as_deref() == Some(path.as_str()) {
-                if !current.is_empty() {
-                    batches.push(make_batch(std::mem::take(&mut current), max_latency_ms));
-                }
+            if let Some(index) = indexes.get(&path).copied() {
+                current[index] = diff;
+                continue;
             }
+            if current.len() >= limit {
+                batches.push(make_batch(std::mem::take(&mut current), max_latency_ms));
+                indexes.clear();
+            }
+            indexes.insert(path, current.len());
             current.push(diff);
-            last_path = Some(path);
         }
         if !current.is_empty() { batches.push(make_batch(current, max_latency_ms)); }
         batches
