@@ -1,0 +1,1 @@
+export type FileModel = {path:string; mode?:number};
