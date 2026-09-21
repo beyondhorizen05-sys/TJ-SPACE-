@@ -394,7 +394,7 @@ fn load_or_create_identity(path:&Path)->Result<Identity>{
         let ed=decode32(&f.ed25519_secret_hex)?;let x=decode32(&f.x25519_secret_hex)?;
         return Ok(Identity{node_id:f.node_id,signing:SigningKey::from_bytes(&ed),x_secret:StaticSecret::from(x)});
     }
-    let signing=SigningKey::generate(&mut OsRng);let x_secret=StaticSecret::random_from_rng(OsRng);
+    let mut rng=OsRng; let signing=SigningKey::generate(&mut rng);let x_secret=StaticSecret::random_from_rng(&mut rng);
     let f=IdentityFile{node_id:Uuid::new_v4().to_string(),ed25519_secret_hex:hex::encode(signing.to_bytes()),x25519_secret_hex:hex::encode(x_secret.to_bytes())};
     if let Some(parent)=path.parent(){if !parent.as_os_str().is_empty(){std::fs::create_dir_all(parent)?;}}
     std::fs::write(path,serde_json::to_vec_pretty(&f)?)?;
