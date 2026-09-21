@@ -197,7 +197,7 @@ impl OsUpdateManager {
         self.save_state(&state)?;
         fs::create_dir_all(&self.config.state_root)?;
         fs::write(self.config.state_root.join(SAFE_MODE_PATH), b"1")?;
-        self.patch_db.apply_patch(Patch{version:1,path:"os.safe_mode".into(),op:PatchOp::Set,value:serde_json::json!(true),actor:"tjsd".into(),authorization:"allow".into()})?;
+        self.patch_db.apply_patch(Patch{version:1,path:"os.safe_mode".into(),op:PatchOp::Set,value:Some(serde_json::json!(true)),actor:"tjsd".into(),authorization:"allow".into()})?;
         Ok(())
     }
 
@@ -206,7 +206,7 @@ impl OsUpdateManager {
         state.safe_mode = false;
         self.save_state(&state)?;
         let _ = fs::remove_file(self.config.state_root.join(SAFE_MODE_PATH));
-        self.patch_db.apply_patch(Patch{version:1,path:"os.safe_mode".into(),op:PatchOp::Set,value:serde_json::json!(false),actor:"tjsd".into(),authorization:"allow".into()})?;
+        self.patch_db.apply_patch(Patch{version:1,path:"os.safe_mode".into(),op:PatchOp::Set,value:Some(serde_json::json!(false)),actor:"tjsd".into(),authorization:"allow".into()})?;
         Ok(())
     }
 
@@ -225,7 +225,7 @@ impl OsUpdateManager {
         let mut state = default_state();
         state.safe_mode = true;
         self.save_state(&state)?;
-        self.patch_db.apply_patch(Patch{version:1,path:"os.factory_reset".into(),op:PatchOp::Set,value:serde_json::json!({"id":reset_id,"preserve_data":preserve_data,"at":Utc::now()}),actor:"tjsd".into(),authorization:"allow".into()})?;
+        self.patch_db.apply_patch(Patch{version:1,path:"os.factory_reset".into(),op:PatchOp::Set,value:Some(serde_json::json!({"id":reset_id,"preserve_data":preserve_data,"at":Utc::now()})),actor:"tjsd".into(),authorization:"allow".into()})?;
         Ok(FactoryResetResult{reset_id,preserve_data,os_wiped:true,preserved_volume_root:backup})
     }
 
@@ -263,7 +263,7 @@ impl OsUpdateManager {
         state.boot_attempts = 0;
         state.previous_version = None;
         self.save_state(&state)?;
-        self.patch_db.apply_patch(Patch{version:1,path:"os.active_version".into(),op:PatchOp::Set,value:serde_json::json!(version),actor:"tjsd".into(),authorization:"allow".into()})?;
+        self.patch_db.apply_patch(Patch{version:1,path:"os.active_version".into(),op:PatchOp::Set,value:Some(serde_json::json!(version)),actor:"tjsd".into(),authorization:"allow".into()})?;
         Ok(())
     }
 
