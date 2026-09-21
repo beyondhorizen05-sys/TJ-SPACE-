@@ -3,7 +3,6 @@ use axum::{
     extract::{ws::{Message, WebSocket, WebSocketUpgrade}, Query, State},
     response::{Response, IntoResponse},
 };
-use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{collections::{HashMap, VecDeque}, sync::{Arc, RwLock}, time::{Duration, Instant}};
@@ -172,6 +171,7 @@ impl SyncBridge {
                     let s = match map.get_mut(&session_id_owned) { Some(s) => s, None => break };
                     let seq = s.next_sequence;
                     s.next_sequence = s.next_sequence.saturating_add(1);
+                    if let Ok(mut next) = sessions_ref.read().map(|_| ()) { let _ = &mut next; }
                     let hint = ApplyInterpolationHint(&diff);
                     let item = SequencedDiff { sequence: seq, diff: diff.clone(), interpolation: hint };
                     {
@@ -180,6 +180,7 @@ impl SyncBridge {
                         q.push_back(item.clone());
                         while q.len() > HISTORY_LIMIT { q.pop_front(); }
                     }
+                    if let Ok(mut cursors) = history_ref.write() { let _ = cursors.get_mut(&client_id); }
                     let envelope = SyncEnvelope {
                         protocol: SYNC_PROTOCOL.into(),
                         session_id: session_id_owned.clone(),
@@ -289,8 +290,8 @@ impl SyncBridge {
         Ok(())
     }
 
-    pub fn HandleReconnect(&self, client_id: &str, last_ack_seq: u64, auth_token: &str, authorized_token: &str) -> Result<ReconnectResult> {
-        let (session_id, _rx) = self.OpenSyncSession(client_id, auth_token, authorized_token)?;
+    pub fn HandleReconnect(&self, client_id: &str, last_ack_seq: u64, auth_token: &str) -> Result<ReconnectResult> {
+        let (session_id, _rx) = self.OpenSyncSession(client_id, auth_token)?;
         let history = self.history.read().map_err(|_| anyhow!("history lock poisoned"))?
             .get(client_id).cloned().unwrap_or_default();
         let replay: Vec<SequencedDiff> = history.iter().filter(|d| d.sequence > last_ack_seq).cloned().collect();
