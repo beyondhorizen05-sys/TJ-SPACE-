@@ -1,0 +1,43 @@
+name: TJ SPACE Release
+on:
+  push:
+    tags: ['v*']
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions: {contents: write}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross --locked
+      - name: Cross build
+        run: |
+          for t in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu riscv64gc-unknown-linux-gnu; do
+            cross build --workspace --release --target "$t"
+          done
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Build SDK and web
+        run: |
+          if [ -f package.json ]; then npm ci && npm run build; fi
+      - name: Package
+        run: |
+          mkdir -p release
+          tar -czf "release/tjspace-${GITHUB_REF_NAME}.tar.gz" --exclude=.git .
+      - name: Sign release
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.TJSPACE_RELEASE_SIGNING_KEY }}
+        run: |
+          test -n "$RELEASE_SIGNING_KEY"
+          sha256sum release/* > release/SHA256SUMS
+          openssl dgst -sha256 -sign <(printf '%s' "$RELEASE_SIGNING_KEY") -out release/SHA256SUMS.sig release/SHA256SUMS
+      - name: Publish to update server
+        env:
+          UPDATE_SERVER_URL: ${{ secrets.TJSPACE_UPDATE_SERVER_URL }}
+          UPDATE_SERVER_TOKEN: ${{ secrets.TJSPACE_UPDATE_SERVER_TOKEN }}
+        run: |
+          test -n "$UPDATE_SERVER_URL"
+          test -n "$UPDATE_SERVER_TOKEN"
+          for f in release/*; do curl --fail --retry 3 -H "Authorization: Bearer $UPDATE_SERVER_TOKEN" -F "artifact=@$f" "$UPDATE_SERVER_URL/api/v1/releases"; done
