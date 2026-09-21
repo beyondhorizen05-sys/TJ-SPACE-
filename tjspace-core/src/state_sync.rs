@@ -162,6 +162,8 @@ impl SyncBridge {
         let sessions_ref = self.sessions.clone();
         let history_ref = self.history.clone();
         let next_client_sequence_ref = self.next_client_sequence.clone();
+        let batch_latency_ms = self.config.batch_latency_ms;
+        let max_batch_diffs = self.config.max_batch_diffs.max(1);
         let client_id = session.client_id.clone();
         let session_id_owned = session_id.to_string();
         tokio::spawn(async move {
@@ -189,9 +191,9 @@ impl SyncBridge {
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 };
                 let mut collected = vec![first];
-                let deadline = tokio::time::sleep(Duration::from_millis(DEFAULT_BATCH_LATENCY_MS));
+                let deadline = tokio::time::sleep(Duration::from_millis(batch_latency_ms));
                 tokio::pin!(deadline);
-                while collected.len() < 128 {
+                while collected.len() < max_batch_diffs {
                     tokio::select! {
                         _ = &mut deadline => break,
                         next = source.recv() => {
@@ -245,7 +247,7 @@ impl SyncBridge {
                     if let Ok(mut cursors) = next_client_sequence_ref.write() {
                         cursors.insert(client_id.clone(), s.next_sequence);
                     }
-                    let batch = make_batch(items, DEFAULT_BATCH_LATENCY_MS);
+                    let batch = make_batch(items, batch_latency_ms);
                     let envelope = SyncEnvelope {
                         protocol: SYNC_PROTOCOL.into(),
                         session_id: session_id_owned.clone(),
