@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package tjspace.v1;
+
+service StateSync {
+  rpc StreamDiffs(SyncRequest) returns (stream DiffMessage);
+}
+
+message SyncRequest {
+  string client_id = 1;
+  string auth_token = 2;
+  string filter_prefix = 3;
+  uint64 last_ack_seq = 4;
+}
+
+message DiffMessage {
+  string session_id = 1;
+  uint64 server_revision = 2;
+  uint64 sequence = 3;
+  bytes payload_json = 4;
+  bool resync_required = 5;
+  bool throttled = 6;
+}
