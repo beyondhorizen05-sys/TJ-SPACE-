@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use axum::{
     extract::{ws::{Message, WebSocket, WebSocketUpgrade}, Query, State},
-    response::Response,
+    response::{Response, IntoResponse},
 };
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -111,24 +111,26 @@ pub struct SyncBridge {
     sessions: Arc<RwLock<HashMap<String, Session>>>,
     history: Arc<RwLock<HashMap<String, VecDeque<SequencedDiff>>>>,
     next_client_sequence: Arc<RwLock<HashMap<String, u64>>>,
+    authorized_token: String,
 }
 
 impl SyncBridge {
-    pub fn new(patch_db: PatchDb, config: SyncConfig) -> Self {
+    pub fn new(patch_db: PatchDb, config: SyncConfig, authorized_token: String) -> Self {
         Self {
             patch_db,
             config,
             sessions: Arc::new(RwLock::new(HashMap::new())),
             history: Arc::new(RwLock::new(HashMap::new())),
             next_client_sequence: Arc::new(RwLock::new(HashMap::new())),
+            authorized_token,
         }
     }
 
-    pub fn OpenSyncSession(&self, client_id: &str, auth_token: &str, authorized_token: &str) -> Result<(String, mpsc::Receiver<SyncEnvelope>)> {
+    pub fn OpenSyncSession(&self, client_id: &str, auth_token: &str) -> Result<(String, mpsc::Receiver<SyncEnvelope>)> {
         if client_id.is_empty() || client_id.len() > 128 {
             return Err(anyhow!("invalid client_id"));
         }
-        if !authorized_token.is_empty() && auth_token != authorized_token {
+        if !self.authorized_token.is_empty() && auth_token != self.authorized_token {
             return Err(anyhow!("sync authentication failed"));
         }
         let session_id = uuid::Uuid::new_v4().to_string();
@@ -352,13 +354,13 @@ pub async fn websocket_handler(
     State(bridge): State<Arc<SyncBridge>>,
     Query(query): Query<SyncQuery>,
 ) -> Response {
-    let result = bridge.OpenSyncSession(&query.client_id, &query.auth_token, "");
+    let result = bridge.OpenSyncSession(&query.client_id, &query.auth_token);
     match result {
         Ok((session_id, _)) => {
             let bridge2 = bridge.clone();
             let prefix = query.prefix.clone();
             let last_ack = query.last_ack_seq;
-            WebSocketUpgrade::from_request_parts_placeholder().on_upgrade(move |socket| async move {
+            ws.on_upgrade(move |socket| async move {
                 handle_websocket(socket, bridge2, session_id, prefix, last_ack).await;
             })
         }
@@ -430,7 +432,7 @@ pub mod grpc {
             request: Request<SyncRequest>,
         ) -> Result<GrpcResponse<Self::StreamDiffsStream>, Status> {
             let req=request.into_inner();
-            let (session_id, _)=self.bridge.OpenSyncSession(&req.client_id,&req.auth_token,&self.authorized_token)
+            let (session_id,_)=self.bridge.OpenSyncSession(&req.client_id,&req.auth_token)
                 .map_err(|e|Status::unauthenticated(e.to_string()))?;
             let filter=SyncFilter{prefix:if req.filter_prefix.is_empty(){None}else{Some(req.filter_prefix)}};
             let mut rx=self.bridge.StreamDiffs(&session_id,filter).map_err(|e|Status::internal(e.to_string()))?;
