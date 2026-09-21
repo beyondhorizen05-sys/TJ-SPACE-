@@ -1,5 +1,5 @@
 use clap::{Parser,Subcommand};
-use tjspace_core::{Core, s9pk_toolchain};
+use tjspace_core::{Core, s9pk_toolchain, registry_server};
 
 #[derive(Parser)]
 #[command(name="tjs-box",version,about="TJ SPACE headless core")]
@@ -24,12 +24,14 @@ enum Command{
     PackageSign{s9pk_path:String,private_key_hex:String},
     PackageVerify{s9pk_path:String,public_key_hex:String},
     PackagePartial{s9pk_path:String,start:u64,end:u64},
+    RegistryServe{config:String},
 }
 #[tokio::main]
 async fn main()->anyhow::Result<()>{
     let args=Args::parse();
     let invoked=std::env::args().next().unwrap_or_default();
     let command=match args.command{Some(c)=>c,None if invoked.ends_with("tjs-cli")=>Command::State,None=>Command::Daemon};
+    if let Command::RegistryServe{config}= &command { let raw=tokio::fs::read_to_string(config).await?; let cfg:registry_server::RegistryConfig=serde_yaml::from_str(&raw)?; return registry_server::RegistryServer::new(cfg)?.serve().await; }
     let core=Core::init_core(&args.config).await?;
     match command{
         Command::Daemon=>core.serve().await?,
