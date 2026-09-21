@@ -1,0 +1,21 @@
+name: TJ SPACE System 10 — Headless CLI API
+on:
+  push:
+    paths:
+      - "tjspace-core/src/headless_api.rs"
+      - "tjspace-core/src/cli.rs"
+      - "tjspace-core/src/lib.rs"
+      - "tjspace-core/Cargo.toml"
+      - "tjspace-core/tests/headless_api.rs"
+  pull_request:
+    paths:
+      - "tjspace-core/**"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test System 10
+        working-directory: tjspace-core
+        run: cargo test --tests headless_api
