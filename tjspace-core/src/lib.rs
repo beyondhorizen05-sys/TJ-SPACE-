@@ -7,6 +7,7 @@ pub mod net;
 pub mod os_install;
 pub mod patch_db;
 pub mod rpc_transport;
+pub mod container_runtime;
 pub mod registry;
 pub mod s9pk;
 pub mod service;
