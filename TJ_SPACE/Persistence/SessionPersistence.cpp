@@ -177,13 +177,7 @@ bool UTJSessionPersistence::RestoreWorld(const FString& SnapshotId)
         if (!Health.IsValid() || !WorldKernel->SetEnvironmentState(Health)) return false;
     }
 
-    if (!WorldKernel->PersistWorldLayout(Layout)) return false;
-
-    for (const FTJSpatialEntityState& Entity : Layout.Entities)
-    {
-        if (AActor* Actor = WorldKernel->ResolveBackendId(Entity.BackendId))
-            Actor->SetActorTransform(Entity.Transform, false, nullptr, ETeleportType::TeleportPhysics);
-    }
+    if (!WorldKernel->RestoreWorldLayout(Layout)) return false;
     LastSnapshotId = SnapshotId;
     return true;
 }
