@@ -18,7 +18,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = "1"
 async-trait = "0.1"
-axum = { version = "0.8", features = ["macros"] }
+axum = { version = "0.8", features = ["macros", "ws"] }
 base64 = "0.22"
 chacha20poly1305 = "0.10"
 blake3 = "1"
@@ -38,12 +38,20 @@ sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid"
 tar = "0.4"
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+prost = "0.14"
+tonic = { version = "0.14", features = ["transport"] }
+tonic-prost = "0.14"
 tower-http = { version = "0.6", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 x25519-dalek = { version = "2", features = ["static_secrets"] }
 flate2 = "1"
+
+[build-dependencies]
+protox = "0.9"
+tonic-prost-build = "0.14"
 
 [dev-dependencies]
 tempfile = "3"
