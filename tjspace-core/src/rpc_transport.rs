@@ -615,6 +615,7 @@ mod tests {
             device_id: Some("dev-1".into()),
             nonce: Some(Uuid::new_v4().to_string()),
             timestamp: Some(Utc::now().timestamp()),
+            scopes: vec!["read".into()],
             auth_cookie: None,
             auth_sig: None,
             headers: HashMap::new(),
