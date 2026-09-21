@@ -86,6 +86,7 @@ pub struct SignedCatalog {
     pub packages: Vec<PackageRecord>,
     pub merkle_root: String,
     pub publisher: String,
+    pub public_key: String,
     pub signature: String,
 }
 
@@ -188,7 +189,7 @@ impl RegistryServer {
         let canonical=serde_json::to_vec(&json!({"revision":revision,"packages":packages}))?;
         let root=*blake3::hash(&canonical).as_bytes();
         let sig=self.catalog_key.sign(&root);
-        Ok(SignedCatalog{revision,generated_at:now(),packages,merkle_root:hex::encode(root),publisher:hex::encode(blake3::hash(self.catalog_key.verifying_key().as_bytes()).as_bytes()),signature:base64::Engine::encode(&base64::engine::general_purpose::STANDARD,sig.to_bytes())})
+        Ok(SignedCatalog{revision,generated_at:now(),packages,merkle_root:hex::encode(root),publisher:hex::encode(blake3::hash(self.catalog_key.verifying_key().as_bytes()).as_bytes()),public_key:hex::encode(self.catalog_key.verifying_key().as_bytes()),signature:base64::Engine::encode(&base64::engine::general_purpose::STANDARD,sig.to_bytes())})
     }
 
     pub async fn serve(self:Arc<Self>)->Result<()>{
@@ -196,6 +197,7 @@ impl RegistryServer {
             .route("/api/v1/registry/index",get(http_index))
             .route("/api/v1/registry/search",get(http_search))
             .route("/api/v1/registry/catalog.json",get(http_catalog))
+            .route("/api/v1/registry/catalog-key",get(http_catalog_key))
             .route("/api/v1/registry/packages/:package_id",get(http_package))
             .route("/api/v1/registry/packages/:package_id/:version",get(http_version))
             .route("/api/v1/registry/packages/:package_id/:version/signature",get(http_signature))
@@ -224,6 +226,7 @@ fn ok_or_429<T:Serialize>(r:Result<T>)->impl IntoResponse{match r{Ok(v)=>(Status
 async fn http_index(State(s):State<Arc<RegistryServer>>,headers:HeaderMap,Query(q):Query<CatalogFilter>)->impl IntoResponse{let r=rate_limit(&s,&headers,"index").and_then(|_|s.get_index(q));ok_or_429(r)}
 async fn http_search(State(s):State<Arc<RegistryServer>>,headers:HeaderMap,Query(q):Query<HashMap<String,String>>)->impl IntoResponse{let r=rate_limit(&s,&headers,"search").and_then(|_|s.search_catalog(q.get("q").map(String::as_str).unwrap_or("")));ok_or_429(r)}
 async fn http_catalog(State(s):State<Arc<RegistryServer>>,headers:HeaderMap)->impl IntoResponse{let r=rate_limit(&s,&headers,"catalog").and_then(|_|s.signed_catalog());ok_or_429(r)}
+async fn http_catalog_key(State(s):State<Arc<RegistryServer>>,headers:HeaderMap)->impl IntoResponse{let r=rate_limit(&s,&headers,"catalog-key").map(|_|json!({"publisher":hex::encode(blake3::hash(s.catalog_key.verifying_key().as_bytes()).as_bytes()),"public_key":hex::encode(s.catalog_key.verifying_key().as_bytes())}));ok_or_429(r)}
 async fn http_package(State(s):State<Arc<RegistryServer>>,headers:HeaderMap,Path(id):Path<String>)->impl IntoResponse{let r=rate_limit(&s,&headers,"package").and_then(|_|s.get_package(&id));ok_or_429(r)}
 async fn http_version(State(s):State<Arc<RegistryServer>>,headers:HeaderMap,Path((id,v)):Path<(String,String)>)->impl IntoResponse{let r=rate_limit(&s,&headers,"version").and_then(|_|s.get_package_version(&id,&v));ok_or_429(r)}
 async fn http_signature(State(s):State<Arc<RegistryServer>>,headers:HeaderMap,Path((id,v)):Path<(String,String)>)->impl IntoResponse{let r=rate_limit(&s,&headers,"signature").and_then(|_|s.get_signature(&id,&v));ok_or_429(r)}
