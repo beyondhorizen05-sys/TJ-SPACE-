@@ -334,7 +334,7 @@ fn atomic_write(path:&Path,data:&[u8])->Result<()> { let tmp=path.with_extension
 fn sha256_file(path:&Path)->Result<String>{ let b=fs::read(path)?; let mut h=Sha256::new(); h.update(&b); Ok(hex::encode(h.finalize())) }
 fn eq_hex(a:&str,b:&str)->bool{a.eq_ignore_ascii_case(b)}
 fn safe_id(v:&str)->Result<String>{if v.is_empty()||v.len()>128||!v.chars().all(|c|c.is_ascii_alphanumeric()||c=='-'||c=='_'||c=='.'){return Err(anyhow!("invalid release id"))}Ok(v.into())}
-fn urlencoding(v:&str)->String{v.replace('%',"%25").replace(' ',"%20").replace('&',"%26").replace('?','%3F').replace('=',"%3D")}
+fn urlencoding(v:&str)->String{v.replace('%',"%25").replace(' ',"%20").replace('&',"%26").replace('?',"%3F").replace('=',"%3D")}
 fn validate_path_arg(p:&str)->Result<()> { if p.is_empty()||p.contains(' '){Err(anyhow!("invalid path"))}else{Ok(())} }
 fn acquire_lock(root:&Path)->Result<fs::File>{ fs::create_dir_all(root)?; let p=root.join(UPDATE_LOCK); match fs::OpenOptions::new().write(true).create_new(true).open(&p){Ok(f)=>Ok(f),Err(e)=>Err(anyhow!("another OS update/reset is active: {e}"))} }
 fn run(cfg:&OsUpdateConfig,cmd:&str,args:&[&str])->Result<()> { if cfg.dry_run{return Ok(())}; let status=Command::new(cmd).args(args).status().with_context(||format!("failed to execute {cmd}"))?; if !status.success(){return Err(anyhow!("{cmd} failed with {status}"))} Ok(())}
