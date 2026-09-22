@@ -351,7 +351,7 @@ impl HardwareManager {
         let op = format!("create-volume:{name}");
         if !self.config.dry_run {
             self.require_confirmation(confirmation_id, &op)?;
-            for d in &resolved { ensure_unmounted(d).await?; }
+            for d in &resolved { ensure_unmounted(d)?; }
         }
         let id = format!("vol-{}", Uuid::new_v4());
         let vg = format!("tjsvg-{}", &id[4..12]);
