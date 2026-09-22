@@ -628,6 +628,7 @@ fn ensure_unmounted(d:&str)->Result<()>{
     if String::from_utf8_lossy(&out.stdout).lines().any(|l|!l.trim().is_empty()){return Err(anyhow!("disk has mounted filesystem: {d}"))}
     Ok(())
 }
+fn validate_module_name(v:&str)->Result<()> { if v.is_empty() || v.len()>128 || !v.chars().all(|c| c.is_ascii_alphanumeric() || c=='_' || c=='-'){ return Err(anyhow!("invalid module name")); } Ok(()) }
 fn validate_name(v:&str)->Result<()>{
     if v.is_empty()||v.len()>64||!v.chars().all(|c|c.is_ascii_alphanumeric()||c=='-'||c=='_'){return Err(anyhow!("invalid volume name"))} Ok(())
 }
