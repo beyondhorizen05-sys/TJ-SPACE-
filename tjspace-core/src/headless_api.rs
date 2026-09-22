@@ -186,4 +186,4 @@ fn rpc_path(method:&str)->String{
     }.into()
 }
 
-fn diag_call<F,Fut>(call:&F,c:DiagCommand)->Result<Value>where F:Fn(String,Value)->Fut,Fut:std::future::Future<Output=Result<Value>>{match c{DiagCommand::Dump=>call("DiagDump".into(),json!({})).await,DiagCommand::Restore{snapshot}=>{let v:Value=serde_json::from_slice(&tokio::fs::read(snapshot).await?)?;call("DiagRestore".into(),json!({"snapshot":v})).await}}}
+async fn diag_call<F,Fut>(call:&F,c:DiagCommand)->Result<Value>where F:Fn(String,Value)->Fut,Fut:std::future::Future<Output=Result<Value>>{match c{DiagCommand::Dump=>call("DiagDump".into(),json!({})).await,DiagCommand::Restore{snapshot}=>{let v:Value=serde_json::from_slice(&tokio::fs::read(snapshot).await?)?;call("DiagRestore".into(),json!({"snapshot":v})).await}}}
