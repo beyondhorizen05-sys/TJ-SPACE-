@@ -361,7 +361,7 @@ impl HardwareManager {
             if let Some(level) = md.as_ref() {
                 let level_name = normalized.as_str();
                 let md_name = level.trim_start_matches("/dev/md/");
-                let mut args = vec!["--create", &format!("/dev/md/{md_name}"), "--level", level_name, "--raid-devices", &disks.len().to_string()];
+                let md_path = format!("/dev/md/{md_name}"); let raid_devices = disks.len().to_string(); let mut args = vec!["--create", md_path.as_str(), "--level", level_name, "--raid-devices", raid_devices.as_str()];
                 let owned: Vec<String> = resolved.clone();
                 let refs: Vec<&str> = owned.iter().map(String::as_str).collect();
                 args.extend(refs);
