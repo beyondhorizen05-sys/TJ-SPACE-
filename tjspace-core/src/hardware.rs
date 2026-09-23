@@ -603,7 +603,7 @@ struct CmdOut { status: std::process::ExitStatus, stdout:String, stderr:String }
 async fn run_command(program:&str,args:&[&str],timeout_secs:u64)->Result<CmdOut>{
     let p=program.to_string(); let a=args.iter().map(|s|s.to_string()).collect::<Vec<_>>();
     let fut=tokio::task::spawn_blocking(move||Command::new(p).args(a).output());
-    let out=timeout(Duration::from_secs(timeout_secs),fut).await.context("command timeout")??;
+    let out=timeout(Duration::from_secs(timeout_secs),fut).await.context("command timeout")?.await.context("command task failed")??;
     Ok(CmdOut{status:out.status,stdout:String::from_utf8_lossy(&out.stdout).into(),stderr:String::from_utf8_lossy(&out.stderr).into()})
 }
 fn opt_string(v:&Value)->Option<String>{v.as_str().map(str::to_owned).filter(|s|!s.is_empty())}
